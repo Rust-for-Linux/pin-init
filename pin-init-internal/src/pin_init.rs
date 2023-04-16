@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
     punctuated::Punctuated, visit_mut, visit_mut::VisitMut, Attribute, Data, DeriveInput, Error,
-    Expr, ExprCall, ExprPath, Fields, GenericParam, Generics, ItemStruct, LifetimeDef, Member,
+    Expr, ExprCall, ExprPath, Fields, GenericParam, Generics, ItemStruct, LifetimeParam, Member,
     Result, TraitBound, TraitBoundModifier, TypeParamBound,
 };
 
@@ -54,7 +54,7 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
         .map(|field| {
             let mut has_pin = false;
             field.attrs.retain(|a| {
-                if a.path.is_ident("pin") {
+                if a.path().is_ident("pin") {
                     has_pin = true;
                     false
                 } else {
@@ -126,7 +126,7 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
         .map(|(f, _)| format_ident!("__C{}", f))
         .collect();
 
-    let this_lifetime: LifetimeDef = syn::parse_str("'__this").unwrap();
+    let this_lifetime: LifetimeParam = syn::parse_str("'__this").unwrap();
     let error_ident = format_ident!("__E");
     let fn_ident = format_ident!("__F");
     let builder_ident = format_ident!("{}Builder", ident);
@@ -402,10 +402,10 @@ fn looks_like_tuple_struct_call(call: &ExprCall) -> bool {
 fn scan_attribute(attrs: &mut Vec<Attribute>) -> Option<bool> {
     let mut ret = None;
     attrs.retain(|a| {
-        if a.path.is_ident("unpin") {
+        if a.path().is_ident("unpin") {
             ret = Some(false);
             false
-        } else if a.path.is_ident("pin") {
+        } else if a.path().is_ident("pin") {
             ret = Some(true);
             false
         } else {
