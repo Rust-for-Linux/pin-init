@@ -110,8 +110,10 @@ impl<T> Mutex<T> {
         F: Init<T, Error>,
     {
         init_pin!(Mutex {
-            mutex: RawMutex::new(),
-            data: init_pin!(UnsafeCell(value)),
+            mutex <- RawMutex::new(),
+            data: init_pin!(UnsafeCell {
+                0 <- value
+            }),
         })
     }
 
@@ -155,8 +157,8 @@ fn main() {
         // created and initialized on the stack.
         init_stack!(
             m = TwoMutex {
-                a: Mutex::new(1),
-                b: Mutex::new(Pinned(1, PhantomPinned))
+                a <- Mutex::new(1),
+                b <- Mutex::new(Pinned(1, PhantomPinned))
             }
         );
         let mut m = m.unwrap();

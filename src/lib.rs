@@ -140,9 +140,9 @@
 //!     b: ManyPin,
 //! }
 //! let p = Box::pin_with(init_pin!(TooManyPin {
-//!     a: NeedPin::new(),
-//!     b: ManyPin {
-//!         a: NeedPin::new(),
+//!     a <- NeedPin::new(),
+//!     b <- ManyPin {
+//!         a <- NeedPin::new(),
 //!         b: 0,
 //!     },
 //! }));
@@ -220,7 +220,7 @@ pub use pin_init_internal::pin_init;
 ///     b: usize,
 /// }
 /// let p = Box::pin_with(init_pin!(ManyPin {
-///     a: NeedPin::new(),
+///     a <- NeedPin::new(),
 ///     b: 0,
 /// }));
 /// # }
@@ -232,10 +232,10 @@ pub use pin_init_internal::pin_init;
 /// # fn main() {
 /// #[pin_init]
 /// struct ManyPin(#[pin] NeedPin, usize);
-/// let p = Box::pin_with(init_pin!(ManyPin(
-///     NeedPin::new(),
-///     0,
-/// )));
+/// let p = Box::pin_with(init_pin!(ManyPin {
+///     0 <- NeedPin::new(),
+///     1: 0,
+/// }));
 /// # }
 /// ```
 ///
@@ -263,7 +263,7 @@ pub use pin_init_internal::pin_init;
 /// #     b: usize,
 /// # }
 /// let p: Result<Pin<Box<_>>, Infallible> = Box::pin_with(init_pin!(ManyPin {
-///     a: NeedPin::new().map_err(Into::into),
+///     a <- NeedPin::new().map_err(Into::into),
 ///     b: 0,
 /// }));
 /// # }
@@ -287,10 +287,9 @@ pub use pin_init_internal::pin_init;
 ///     b: ManyPin,
 /// }
 /// let p = Box::pin_with(init_pin!(TooManyPin {
-///     a: NeedPin::new(),
-///     // Nested by default. To opt out write `b: #[unpin] NeedPin {`.
-///     b: ManyPin {
-///         a: NeedPin::new(),
+///     a <- NeedPin::new(),
+///     b <- ManyPin {
+///         a <- NeedPin::new(),
 ///         b: 0,
 ///     },
 /// }));
@@ -310,7 +309,7 @@ pub use pin_init_internal::pin_init;
 /// impl ManyPin {
 ///     pub fn new() -> impl Init<Self, Infallible> {
 ///         init_pin!(ManyPin {
-///             a: NeedPin::new(),
+///             a <- NeedPin::new(),
 ///             b: 1,
 ///         })
 ///     }
@@ -325,8 +324,12 @@ pub use pin_init_internal::pin_init;
 /// use core::cell::UnsafeCell;
 /// use core::cell::Cell;
 /// specify_err::<_, Infallible, _>(init_pin!(PhantomPinned));
-/// init_pin!(UnsafeCell(NeedPin::new()));
-/// init_pin!(Cell(NeedPin::new()));
+/// init_pin!(UnsafeCell {
+///     0 <- NeedPin::new()
+/// });
+/// init_pin!(Cell {
+///     0 <- NeedPin::new()
+/// });
 /// # }
 /// ```
 pub use pin_init_internal::init_pin;
@@ -1004,7 +1007,7 @@ pub mod __private {
 ///     b: usize,
 /// }
 /// init_stack!(p = init_pin!(ManyPin {
-///     a: NeedPin::new(),
+///     a <- NeedPin::new(),
 ///     b: 0,
 /// }));
 /// # }
@@ -1016,9 +1019,9 @@ pub mod __private {
 /// be kept, this macro will abort the process.
 #[macro_export]
 macro_rules! init_stack {
-    ($var:ident = $init:expr) => {
+    ($var:ident = $($tt:tt)*) => {
         let mut storage = $crate::__private::StackWrapper::new();
         let $var =
-            unsafe { ::core::pin::Pin::new_unchecked(&mut storage) }.init($crate::init_pin!($init));
+            unsafe { ::core::pin::Pin::new_unchecked(&mut storage) }.init($crate::init_pin!($($tt)*));
     };
 }

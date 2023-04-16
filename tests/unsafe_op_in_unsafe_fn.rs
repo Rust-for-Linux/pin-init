@@ -11,7 +11,7 @@ struct NeedPin {
 }
 
 fn main() {
-    init_stack!(p = specify_err::<_, (), _>(NeedPin { a: 1, b: 2 }));
+    init_stack!(p = specify_err::<_, (), _>(init_pin!(NeedPin { a <- 1, b: 2 })));
     let p = p.unwrap();
     let _ = p;
 }
