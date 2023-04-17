@@ -295,6 +295,7 @@ pub use pin_init_internal::pin_init;
 /// }));
 /// # }
 /// ```
+/// If you want to opt out from nested initialization, simple wrap the struct expression with `()` or `{}`.
 ///
 /// If you want to define a constructor, you can write like this:
 /// ```

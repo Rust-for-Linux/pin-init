@@ -448,17 +448,15 @@ impl TryFrom<InitStructOrExpr> for Expr {
 
 impl Parse for InitStructOrExpr {
     fn parse(input: ParseStream) -> Result<Self> {
-        // Try parse as expression first, because if the <- syntax is used then it'll be illegal Rust
-        // expression.
         let fork = input.fork();
-        match fork.parse::<Expr>() {
+        match fork.parse::<InitStruct>() {
             Ok(s) => {
                 input.advance_to(&fork);
-                Ok(InitStructOrExpr::Expr(s))
+                Ok(InitStructOrExpr::Struct(s))
             }
-            Err(e) => match input.parse::<InitStruct>() {
-                Ok(s) => Ok(InitStructOrExpr::Struct(s)),
-                Err(_) => Err(e),
+            Err(_) => match input.parse::<Expr>() {
+                Ok(s) => Ok(InitStructOrExpr::Expr(s)),
+                Err(e) => Err(e),
             },
         }
     }
