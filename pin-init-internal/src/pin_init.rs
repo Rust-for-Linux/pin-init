@@ -1,8 +1,9 @@
 use std::convert::TryFrom;
 
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, quote_spanned, ToTokens};
+use quote::{format_ident, quote, quote_spanned};
 use syn::parse::{discouraged::Speculative, Parse, ParseStream};
+use syn::GenericArgument;
 use syn::{
     braced, punctuated::Punctuated, token::Brace, Data, DeriveInput, Error, Expr, ExprPath, Fields,
     GenericParam, Generics, ItemStruct, LifetimeParam, Member, Path, Token, TraitBound,
@@ -46,6 +47,23 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
             ))
         }
     };
+
+    let ty_generics: Vec<_> = generics
+        .params
+        .iter()
+        .map(|x| match x {
+            GenericParam::Lifetime(l) => GenericArgument::Lifetime(l.lifetime.clone()),
+            GenericParam::Type(t) => GenericArgument::Type(syn::Type::Path(syn::TypePath {
+                qself: None,
+                path: Path::from(t.ident.clone()),
+            })),
+            GenericParam::Const(c) => GenericArgument::Const(syn::Expr::Path(ExprPath {
+                attrs: Vec::new(),
+                qself: None,
+                path: Path::from(c.ident.clone()),
+            })),
+        })
+        .collect();
 
     let (mut fields, named) = match data.fields {
         Fields::Named(v) => (v.named, true),
@@ -111,16 +129,6 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
                 GenericParam::Const(c) => c.default = None,
             }
             x
-        })
-        .collect();
-    let ty_generics: Vec<_> = generics
-        .iter()
-        .map(|x| -> &dyn ToTokens {
-            match x {
-                GenericParam::Lifetime(l) => &l.lifetime,
-                GenericParam::Type(t) => &t.ident,
-                GenericParam::Const(c) => &c.ident,
-            }
         })
         .collect();
 
