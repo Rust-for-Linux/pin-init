@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
 use syn::parse::{discouraged::Speculative, Parse, ParseStream};
+use syn::visit_mut::VisitMut;
 use syn::GenericArgument;
 use syn::{
     braced, punctuated::Punctuated, token::Brace, Data, DeriveInput, Error, Expr, ExprPath, Fields,
@@ -22,6 +23,23 @@ pub fn pin_init_attr(_attr: TokenStream, input: TokenStream) -> Result<TokenStre
     })
 }
 
+struct SelfReplacer<'a> {
+    segment: &'a syn::PathSegment,
+}
+
+impl VisitMut for SelfReplacer<'_> {
+    // Don't recurse into items because meaning of `Self` is different there.
+    fn visit_item_mut(&mut self, _: &mut syn::Item) {}
+
+    fn visit_path_segment_mut(&mut self, seg: &mut syn::PathSegment) {
+        if seg.ident == "Self" {
+            *seg = self.segment.clone();
+            return;
+        }
+        syn::visit_mut::visit_path_segment_mut(self, seg);
+    }
+}
+
 pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
     let DeriveInput {
         vis,
@@ -32,7 +50,7 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
     } = syn::parse2(input)?;
 
     // Check this is a struct, and extract inner.
-    let data = match data {
+    let mut data = match data {
         Data::Struct(v) => v,
         Data::Enum(v) => {
             return Err(Error::new(
@@ -64,6 +82,21 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
             })),
         })
         .collect();
+
+    let self_path = syn::PathSegment {
+        ident: ident.clone(),
+        arguments: syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
+            colon2_token: Some(Default::default()),
+            lt_token: Default::default(),
+            args: ty_generics.iter().cloned().collect(),
+            gt_token: Default::default(),
+        }),
+    };
+
+    SelfReplacer {
+        segment: &self_path,
+    }
+    .visit_data_struct_mut(&mut data);
 
     let (mut fields, named) = match data.fields {
         Fields::Named(v) => (v.named, true),
@@ -194,7 +227,7 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
                 #(,#generics)*
                 #typestate_impl
             > #where_clause {
-                ptr: ::pin_init::PinUninit<#this_lifetime, #ident<#(#ty_generics),*>>,
+                ptr: ::pin_init::PinUninit<#this_lifetime, #self_path>,
             }
 
             #[allow(nonstandard_style)]
@@ -348,7 +381,7 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
             impl<
                 #this_lifetime
                 #(,#generics)*
-            > ::pin_init::Initable<#this_lifetime> for #ident<#(#ty_generics),*> #where_clause {
+            > ::pin_init::Initable<#this_lifetime> for #self_path #where_clause {
                 #[doc(hidden)]
                 type __PinInitBuilder = #builder_ident <
                     #this_lifetime

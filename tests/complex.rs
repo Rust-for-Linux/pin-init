@@ -50,3 +50,32 @@ where
 struct Unsized<T: ?Sized> {
     t: T,
 }
+
+#[pin_init]
+struct Tree {
+    left: Option<Box<Self>>,
+    right: Option<Box<Self>>,
+}
+
+#[pin_init]
+struct Tree2 where Self: {
+    left: Option<Box<Self>>,
+    right: Option<Box<Self>>,
+}
+
+#[pin_init]
+struct Tree3 {
+    left: Option<Box<Self>>,
+    right: Option<Box<Self>>,
+    phantom: [(); {
+        struct Foo;
+
+        impl Foo {
+            fn new() -> Self {
+                Foo
+            }
+        }
+
+        0
+    }]
+}
