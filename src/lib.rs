@@ -95,7 +95,7 @@
 //! # }
 //! impl NeedPin {
 //!     pub fn new() -> impl Init<Self, Infallible> {
-//!         init_from_closure(|mut this: PinUninit<'_, Self>| -> InitResult<'_, Self, Infallible> {
+//!         init_from_closure(unsafe { UnsafeToken::new() }, |mut this: PinUninit<'_, Self>| -> InitResult<'_, Self, Infallible> {
 //!             let v = this.get_mut().as_mut_ptr();
 //!             unsafe { *ptr::addr_of_mut!((*v).address) = v };
 //!             Ok(unsafe { this.init_ok() })
@@ -380,12 +380,8 @@ impl<'a, T> PinUninit<'a, T> {
     /// * If [`InitOk`] is obtained, the caller must treat the `ptr` as [`Pin<&mut T>`].
     ///   This means that the drop guarantee kick in; the memory cannot be deallocated until `T`
     ///   is dropped.
-    /// * If [`InitErr`] is obtained, `ptr` is uninitialized and the caller must not
-    ///   try to drop `T`.
-    /// * If panic happens while trying to get the result, then we are not certain about
-    ///   initialization state. This means that the caller must respect the drop guarantee,
-    ///   but also not drop the value. The only solution is to leak memory. If that's not possible,
-    ///   then the caller must abort the process.
+    /// * Otherwise, if `Err` is returned or panic happens, `ptr` is uninitialized and the caller
+    ///   must not try to drop `T`.
     ///
     /// The lifetime associated with this function should be "closed". It should be a local,
     /// temporary lifetime, shorter than any of the lifetime the caller have access to (including
@@ -423,19 +419,6 @@ impl<'a, T> PinUninit<'a, T> {
     pub unsafe fn init_ok(self) -> InitOk<'a, T> {
         InitOk {
             ptr: self.ptr as *mut T,
-            marker: PhantomData,
-        }
-    }
-
-    /// Generates a `InitResult` signaling that the initialization is failed.
-    ///
-    /// Note that the caller should make sure nothing is partially pinned-initialized.
-    /// This isn't the contract of this function, but is the contract for
-    /// creating `PinUninit` for pinned-initializing sub-fields.
-    #[inline]
-    pub fn init_err<E>(self, err: E) -> InitErr<'a, E> {
-        InitErr {
-            inner: err,
             marker: PhantomData,
         }
     }
@@ -494,57 +477,24 @@ impl<'a, T> InitOk<'a, T> {
     }
 }
 
-/// Proof that the value is not pin-initialized.
-///
-/// See documentation of [`PinUninit`] for details.
-pub struct InitErr<'a, E> {
-    inner: E,
-    marker: PhantomData<&'a mut ()>,
-}
-
-impl<'a, E> InitErr<'a, E> {
-    /// Get a reference to the inner error.
-    #[inline]
-    pub fn as_ref(&self) -> &E {
-        &self.inner
-    }
-
-    /// Get a mutable reference to the inner error.
-    #[inline]
-    pub fn as_mut(&mut self) -> &mut E {
-        &mut self.inner
-    }
-
-    /// Get the inner error.
-    #[inline]
-    pub fn into_inner(self) -> E {
-        self.inner
-    }
-
-    /// Map the inner error with the given function.
-    #[inline]
-    pub fn map<T, F>(self, f: F) -> InitErr<'a, T>
-    where
-        F: FnOnce(E) -> T,
-    {
-        InitErr {
-            inner: f(self.inner),
-            marker: PhantomData,
-        }
-    }
-}
-
 /// Result of pin-initialization.
 ///
 /// See documentation of [`PinUninit`] for details.
-pub type InitResult<'a, T, E> = Result<InitOk<'a, T>, InitErr<'a, E>>;
+pub type InitResult<'a, T, E> = Result<InitOk<'a, T>, E>;
 
 /// Initializer that can be used to safely pin-initialize `T`.
 ///
 /// A blanket implementation `impl<T, E> Init<T, E> for T` is provided for all types, so
 /// a non-pinned value can be used directly for pin-initialization.
-pub trait Init<T, E>: Sized {
+///
+/// # Safety
+///
+/// Implementator must ensure `__init` adheres to its documentation.
+pub unsafe trait Init<T, E>: Sized {
     /// Pin-initialize `this`.
+    ///
+    /// If `__init` returns `Err` or panics, then `this` must be completely uninitialized (any
+    /// fields that are already initialized must be dropped).
     fn __init<'a>(self, this: PinUninit<'a, T>) -> InitResult<'a, T, E>;
 
     /// Maps the error from `E` to `E2`.
@@ -560,7 +510,7 @@ pub trait Init<T, E>: Sized {
     }
 }
 
-impl<T, E> Init<T, E> for T {
+unsafe impl<T, E> Init<T, E> for T {
     fn __init<'a>(self, this: PinUninit<'a, T>) -> InitResult<'a, T, E> {
         Ok(this.init_with_value(self))
     }
@@ -574,7 +524,7 @@ pub struct MapErr<T, E, E2, I, F> {
     marker: PhantomData<(fn(T) -> E, fn(E) -> E2)>,
 }
 
-impl<T, E, E2, I, F> Init<T, E2> for MapErr<T, E, E2, I, F>
+unsafe impl<T, E, E2, I, F> Init<T, E2> for MapErr<T, E, E2, I, F>
 where
     I: Init<T, E>,
     F: FnOnce(E) -> E2,
@@ -582,7 +532,7 @@ where
     fn __init<'a>(self, this: PinUninit<'a, T>) -> InitResult<'a, T, E2> {
         match self.init.__init(this) {
             Ok(v) => Ok(v),
-            Err(v) => Err(v.map(self.map)),
+            Err(v) => Err((self.map)(v)),
         }
     }
 }
@@ -595,8 +545,16 @@ where
     init
 }
 
+pub struct UnsafeToken(());
+
+impl UnsafeToken {
+    pub unsafe fn new() -> Self {
+        Self(())
+    }
+}
+
 /// Construct a [`Init<T, E>`] with a closure.
-pub fn init_from_closure<T, E, F>(f: F) -> impl Init<T, E>
+pub fn init_from_closure<T, E, F>(_: UnsafeToken, f: F) -> impl Init<T, E>
 where
     F: for<'a> FnOnce(PinUninit<'a, T>) -> InitResult<'a, T, E>,
 {
@@ -604,7 +562,7 @@ where
     where
         F: for<'a> FnOnce(PinUninit<'a, T>) -> InitResult<'a, T, E>;
 
-    impl<T, E, F> Init<T, E> for ClosureInit<T, E, F>
+    unsafe impl<T, E, F> Init<T, E> for ClosureInit<T, E, F>
     where
         F: for<'a> FnOnce(PinUninit<'a, T>) -> InitResult<'a, T, E>,
     {
@@ -648,7 +606,6 @@ impl<T> PtrInit<T> for Box<T> {
                 Ok(unsafe { mem::transmute(ptr) })
             }
             Err(err) => {
-                let err = err.into_inner();
                 // SAFETY: We know it's not initialized.
                 drop(ManuallyDrop::into_inner(ptr));
                 Err(err)
@@ -672,7 +629,6 @@ impl<T> PtrInit<T> for UniqueRc<T> {
         match init.__init(unsafe { PinUninit::new(&mut ptr) }) {
             Ok(_) => Ok(unsafe { mem::transmute(ptr) }),
             Err(err) => {
-                let err = err.into_inner();
                 drop(ManuallyDrop::into_inner(ptr));
                 Err(err)
             }
@@ -696,7 +652,6 @@ impl<T> PtrInit<T> for UniqueArc<T> {
         match init.__init(unsafe { PinUninit::new(&mut ptr) }) {
             Ok(_) => Ok(unsafe { mem::transmute(ptr) }),
             Err(err) => {
-                let err = err.into_inner();
                 drop(ManuallyDrop::into_inner(ptr));
                 Err(err)
             }
@@ -906,7 +861,7 @@ pub mod __private {
                     this.1 = true;
                     Ok(ok.into_inner())
                 }
-                Err(err) => Err(err.into_inner()),
+                Err(err) => Err(err),
             }
         }
     }
@@ -972,7 +927,7 @@ pub mod __private {
 
     impl<'this, T, W> TransparentBuilder<'this, T, W> {
         #[inline]
-        pub fn __next<E, F>(mut self, f: F) -> Result<ValueBuilder<'this, W>, InitErr<'this, E>>
+        pub fn __next<E, F>(mut self, f: F) -> Result<ValueBuilder<'this, W>, E>
         where
             F: Init<T, E>,
         {
@@ -980,7 +935,7 @@ pub mod __private {
             let ptr = self.0.get_mut().as_mut_ptr() as *mut MaybeUninit<T>;
             match f.__init(unsafe { PinUninit::new(&mut *ptr) }) {
                 Ok(_) => Ok(ValueBuilder(unsafe { self.0.init_ok() })),
-                Err(err) => Err(self.0.init_err(err.into_inner())),
+                Err(err) => Err(err),
             }
         }
     }

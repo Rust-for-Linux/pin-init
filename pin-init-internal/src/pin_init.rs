@@ -194,16 +194,14 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
                 #this_lifetime
                 #(,#generics)*
                 #typestate_impl
-            > #builder_ident <
+            > ::core::ops::Drop for #builder_ident <
                 #this_lifetime
                 #(,#ty_generics)*
                 #typestate_ty
             > #where_clause {
-                #[inline]
-                fn __init_err<#error_ident>(mut self, err: #error_ident) -> ::pin_init::InitErr<#this_lifetime, #error_ident> {
+                fn drop(&mut self) {
                     let base = self.ptr.get_mut().as_mut_ptr();
                     #drop_impl
-                    self.ptr.init_err(err)
                 }
             }
         });
@@ -251,7 +249,7 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
                     #this_lifetime
                     #(,#ty_generics)*
                     #typestate_ty_post
-                >, ::pin_init::InitErr<#this_lifetime, #error_ident>>
+                >, #error_ident>
                     where #fn_ident: ::pin_init::Init<#ty, #error_ident>
                 {
                     let base = self.ptr.get_mut().as_mut_ptr();
@@ -261,9 +259,11 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
                     let pin = unsafe { ::pin_init::PinUninit::new(&mut *(ptr as *mut ::core::mem::MaybeUninit<_>)) };
                     match f.__init(pin) {
                         Ok(_) => (),
-                        Err(err) => return Err(self.__init_err(err.into_inner())),
+                        Err(err) => return Err(err),
                     }
-                    Ok(#builder_ident { ptr: self.ptr })
+                    // SAFETY: This is really just `#builder_ident { ptr: self.ptr }` but we
+                    // couldn't do it because builder has `Drop` impl.
+                    Ok(unsafe { ::core::mem::transmute(self) })
                 }
             }
         } else {
@@ -272,14 +272,14 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
                     #this_lifetime
                     #(,#ty_generics)*
                     #typestate_ty_post
-                >, ::pin_init::InitErr<#this_lifetime, #error_ident>>
+                >, #error_ident>
                 {
                     let base = self.ptr.get_mut().as_mut_ptr();
                     unsafe {
                         let ptr = ::core::ptr::addr_of_mut!((*base).#field_name_current);
                         ptr.write(f);
                     }
-                    Ok(#builder_ident { ptr: self.ptr })
+                    Ok(unsafe { ::core::mem::transmute(self) })
                 }
             }
         };
@@ -329,7 +329,9 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
             > #where_clause {
                 #[inline]
                 pub fn __init_ok(mut self) -> ::pin_init::InitOk<#this_lifetime, #ident<#(#ty_generics),*>>{
-                    unsafe { self.ptr.init_ok() }
+                    unsafe {
+                        ::core::mem::transmute::<_, ::pin_init::PinUninit<#this_lifetime, _>>(self).init_ok()
+                    }
                 }
             }
 
@@ -502,7 +504,7 @@ impl InitStruct {
             }
 
             syn::parse2(quote_spanned! {Span::mixed_site()=>
-                ::pin_init::init_from_closure(move |this| {
+                ::pin_init::init_from_closure(unsafe { ::pin_init::UnsafeToken::new() }, move |this| {
                     use ::pin_init::Initable;
                     let builder = #path::__pin_init_builder(this);
                     #(#builder_segment)*
@@ -524,7 +526,7 @@ impl InitStruct {
             }
 
             syn::parse2(quote_spanned! {Span::mixed_site()=>
-                ::pin_init::init_from_closure(move |this| {
+                ::pin_init::init_from_closure(unsafe { ::pin_init::UnsafeToken::new() }, move |this| {
                     use ::pin_init::Initable;
                     let builder = #path::__pin_init_builder(this);
                     #(#builder_segment)*

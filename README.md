@@ -76,7 +76,7 @@ constructor of type `FnOnce() -> Result<T, Err>` like a normal unpinned type,
 ```rust
 impl NeedPin {
     pub fn new() -> impl Init<Self, Infallible> {
-        init_from_closure(|mut this: PinUninit<'_, Self>| -> InitResult<'_, Self, Infallible> {
+        init_from_closure(unsafe { UnsafeToken::new() }, |mut this: PinUninit<'_, Self>| -> InitResult<'_, Self, Infallible> {
             let v = this.get_mut().as_mut_ptr();
             unsafe { *ptr::addr_of_mut!((*v).address) = v };
             Ok(unsafe { this.init_ok() })

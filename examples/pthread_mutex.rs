@@ -32,7 +32,7 @@ impl Drop for RawMutex {
 impl RawMutex {
     // Use pin_init's abstraction to provide a safe initializaiton.
     pub fn new() -> impl Init<Self, Error> {
-        init_from_closure(|mut this| {
+        init_from_closure(unsafe { UnsafeToken::new() }, |mut this| {
             let ptr = this.get_mut().as_mut_ptr() as *mut libc::pthread_mutex_t;
             unsafe {
                 ptr.write(libc::PTHREAD_MUTEX_INITIALIZER);
@@ -40,20 +40,20 @@ impl RawMutex {
                 let mut attr = MaybeUninit::<libc::pthread_mutexattr_t>::uninit();
                 let ret = libc::pthread_mutexattr_init(attr.as_mut_ptr());
                 if ret != 0 {
-                    return Err(this.init_err(Error::from_raw_os_error(ret)));
+                    return Err(Error::from_raw_os_error(ret));
                 }
 
                 let ret =
                     libc::pthread_mutexattr_settype(attr.as_mut_ptr(), libc::PTHREAD_MUTEX_NORMAL);
                 if ret != 0 {
                     libc::pthread_mutexattr_destroy(attr.as_mut_ptr());
-                    return Err(this.init_err(Error::from_raw_os_error(ret)));
+                    return Err(Error::from_raw_os_error(ret));
                 }
 
                 let ret = libc::pthread_mutex_init(ptr, attr.as_ptr());
                 libc::pthread_mutexattr_destroy(attr.as_mut_ptr());
                 if ret != 0 {
-                    return Err(this.init_err(Error::from_raw_os_error(ret)));
+                    return Err(Error::from_raw_os_error(ret));
                 }
 
                 Ok(this.init_ok())
