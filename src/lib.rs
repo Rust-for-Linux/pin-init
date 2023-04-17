@@ -347,7 +347,7 @@ use alloc::{boxed::Box, rc::Rc, sync::Arc};
 #[cfg(feature = "alloc_try_pin_with")]
 use core::alloc::AllocError;
 #[cfg(feature = "alloc")]
-use core::{mem::ManuallyDrop, ops::Deref};
+use core::ops::Deref;
 
 /// A pinned, uninitialized pointer.
 ///
@@ -594,23 +594,12 @@ impl<T> PtrInit<T> for Box<T> {
         I: Init<T, E>,
     {
         // SAFETY: We don't move value out.
-        // If `f` below panics, we might be in a partially initialized state. We
-        // cannot drop nor assume_init, so we can only leak.
-        let mut ptr = ManuallyDrop::new(unsafe { Pin::into_inner_unchecked(uninit) });
+        let mut ptr = unsafe { Pin::into_inner_unchecked(uninit) };
         // SAFETY: pinning is guaranteed by `storage`'s pin guarantee.
         //         We will check the return value, and act accordingly.
-        match init.__init(unsafe { PinUninit::new(&mut ptr) }) {
-            Ok(_) => {
-                // SAFETY: We know it's initialized, and both `ManuallyDrop` and `Pin`
-                //         are `#[repr(transparent)]` so this is safe.
-                Ok(unsafe { mem::transmute(ptr) })
-            }
-            Err(err) => {
-                // SAFETY: We know it's not initialized.
-                drop(ManuallyDrop::into_inner(ptr));
-                Err(err)
-            }
-        }
+        init.__init(unsafe { PinUninit::new(&mut ptr) })?;
+        // SAFETY: We know it's initialized, and `Pin` is transparent.
+        Ok(unsafe { mem::transmute(ptr) })
     }
 }
 
@@ -625,14 +614,9 @@ impl<T> PtrInit<T> for UniqueRc<T> {
         I: Init<T, E>,
     {
         // SAFETY: See `init_box`.
-        let mut ptr = ManuallyDrop::new(unsafe { Pin::into_inner_unchecked(uninit) });
-        match init.__init(unsafe { PinUninit::new(&mut ptr) }) {
-            Ok(_) => Ok(unsafe { mem::transmute(ptr) }),
-            Err(err) => {
-                drop(ManuallyDrop::into_inner(ptr));
-                Err(err)
-            }
-        }
+        let mut ptr = unsafe { Pin::into_inner_unchecked(uninit) };
+        init.__init(unsafe { PinUninit::new(&mut ptr) })?;
+        Ok(unsafe { mem::transmute(ptr) })
     }
 }
 
@@ -648,14 +632,9 @@ impl<T> PtrInit<T> for UniqueArc<T> {
         I: Init<T, E>,
     {
         // SAFETY: See `init_box`.
-        let mut ptr = ManuallyDrop::new(unsafe { Pin::into_inner_unchecked(uninit) });
-        match init.__init(unsafe { PinUninit::new(&mut ptr) }) {
-            Ok(_) => Ok(unsafe { mem::transmute(ptr) }),
-            Err(err) => {
-                drop(ManuallyDrop::into_inner(ptr));
-                Err(err)
-            }
-        }
+        let mut ptr = unsafe { Pin::into_inner_unchecked(uninit) };
+        init.__init(unsafe { PinUninit::new(&mut ptr) })?;
+        Ok(unsafe { mem::transmute(ptr) })
     }
 }
 
@@ -848,21 +827,10 @@ pub mod __private {
             assert!(!self.1);
 
             let this = unsafe { self.get_unchecked_mut() };
+            let ok = f.__init(unsafe { PinUninit::new(&mut this.0) })?;
 
-            // If `f` below panics, we might be in a partially initialized state. We
-            // cannot drop nor assume_init, and we cannot leak memory on stack. So
-            // the only sensible action would be to abort (with double-panic).
-            let g = PanicGuard;
-            let res = f.__init(unsafe { PinUninit::new(&mut this.0) });
-            mem::forget(g);
-
-            match res {
-                Ok(ok) => {
-                    this.1 = true;
-                    Ok(ok.into_inner())
-                }
-                Err(err) => Err(err),
-            }
+            this.1 = true;
+            Ok(ok.into_inner())
         }
     }
 
