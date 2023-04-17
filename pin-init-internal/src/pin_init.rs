@@ -259,6 +259,7 @@ pub fn pin_init_derive(input: TokenStream) -> Result<TokenStream> {
                     let pin = unsafe { ::pin_init::PinUninit::new(&mut *(ptr as *mut ::core::mem::MaybeUninit<_>)) };
                     match f.__init(pin) {
                         Ok(_) => (),
+                        #[allow(unreachable_code)]
                         Err(err) => return Err(err),
                     }
                     // SAFETY: This is really just `#builder_ident { ptr: self.ptr }` but we
@@ -498,6 +499,7 @@ impl InitStruct {
                 builder_segment.push(quote_spanned! {Span::mixed_site()=>
                     let builder = match builder.__next(#expr) {
                         Ok(v) => v,
+                        #[allow(unreachable_code)]
                         Err(err) => return Err(err),
                     };
                 });
@@ -520,6 +522,7 @@ impl InitStruct {
                 builder_segment.push(quote_spanned! {Span::mixed_site()=>
                     let builder = match builder.#member(#expr) {
                         Ok(v) => v,
+                        #[allow(unreachable_code)]
                         Err(err) => return Err(err),
                     };
                 });
