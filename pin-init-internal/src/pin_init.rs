@@ -506,7 +506,7 @@ impl InitStruct {
             }
 
             syn::parse2(quote_spanned! {Span::mixed_site()=>
-                ::pin_init::init_from_closure(unsafe { ::pin_init::UnsafeToken::new() }, move |this| {
+                ::pin_init::init_from_closure(unsafe { ::pin_init::UnsafeToken::new() }, |this| {
                     use ::pin_init::Initable;
                     let builder = #path::__pin_init_builder(this);
                     #(#builder_segment)*
@@ -529,7 +529,7 @@ impl InitStruct {
             }
 
             syn::parse2(quote_spanned! {Span::mixed_site()=>
-                ::pin_init::init_from_closure(unsafe { ::pin_init::UnsafeToken::new() }, move |this| {
+                ::pin_init::init_from_closure(unsafe { ::pin_init::UnsafeToken::new() }, |this| {
                     use ::pin_init::Initable;
                     let builder = #path::__pin_init_builder(this);
                     #(#builder_segment)*
