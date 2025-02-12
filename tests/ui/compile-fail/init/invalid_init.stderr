@@ -5,12 +5,9 @@ error[E0277]: the trait bound `impl pin_init::PinInit<Bar>: Init<Bar>` is not sa
    |  _____________^
 19 | |         bar <- Bar::new(),
 20 | |     });
-   | |      ^
-   | |      |
-   | |______the trait `Init<Bar>` is not implemented for `impl pin_init::PinInit<Bar>`
-   |        required by a bound introduced by this call
+   | |______^ the trait `Init<Bar>` is not implemented for `impl pin_init::PinInit<Bar>`
    |
    = help: the following other types implement trait `Init<T, E>`:
              ChainInit<I, F, T, E>
              Result<T, E>
-   = note: this error originates in the macro `$crate::__init_internal` which comes from the expansion of the macro `init` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `init` (in Nightly builds, run with -Z macro-backtrace for more info)
