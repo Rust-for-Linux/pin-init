@@ -942,7 +942,7 @@ macro_rules! __pin_data {
         // if it also implements `Drop`
         trait MustNotImplDrop {}
         #[expect(drop_bounds)]
-        impl<T: ::core::ops::Drop> MustNotImplDrop for T {}
+        impl<T: ::core::ops::Drop + ?::core::marker::Sized> MustNotImplDrop for T {}
         impl<$($impl_generics)*> MustNotImplDrop for $name<$($ty_generics)*>
         where $($whr)* {}
         // We also take care to prevent users from writing a useless `PinnedDrop` implementation.
@@ -950,7 +950,7 @@ macro_rules! __pin_data {
         // `PinnedDrop` as the parameter to `#[pin_data]`.
         #[expect(non_camel_case_types)]
         trait UselessPinnedDropImpl_you_need_to_specify_PinnedDrop {}
-        impl<T: $crate::PinnedDrop>
+        impl<T: $crate::PinnedDrop + ?::core::marker::Sized>
             UselessPinnedDropImpl_you_need_to_specify_PinnedDrop for T {}
         impl<$($impl_generics)*>
             UselessPinnedDropImpl_you_need_to_specify_PinnedDrop for $name<$($ty_generics)*>
