@@ -243,8 +243,16 @@
 //! [structurally pinned fields]:
 //!     https://doc.rust-lang.org/std/pin/index.html#pinning-is-structural-for-field
 //! [stack]: crate::stack_pin_init
-//! [`Arc<T>`]: https://doc.rust-lang.org/stable/alloc/sync/struct.Arc.html
-//! [`Box<T>`]: https://doc.rust-lang.org/stable/alloc/boxed/struct.Box.html
+#![cfg_attr(
+    kernel,
+    doc = "[`Arc<T>`]: https://rust.docs.kernel.org/kernel/sync/struct.Arc.html"
+)]
+#![cfg_attr(
+    kernel,
+    doc = "[`Box<T>`]: https://rust.docs.kernel.org/kernel/alloc/kbox/struct.Box.html"
+)]
+#![cfg_attr(not(kernel), doc = "[`Arc<T>`]: alloc::alloc::sync::Arc")]
+#![cfg_attr(not(kernel), doc = "[`Box<T>`]: alloc::alloc::boxed::Box")]
 //! [`impl PinInit<Foo>`]: crate::PinInit
 //! [`impl PinInit<T, E>`]: crate::PinInit
 //! [`impl Init<T, E>`]: crate::Init
@@ -981,8 +989,16 @@ macro_rules! assert_pinned {
 ///     - `slot` is not partially initialized.
 /// - while constructing the `T` at `slot` it upholds the pinning invariants of `T`.
 ///
-/// [`Arc<T>`]: alloc::alloc::sync::Arc
-/// [`Box<T>`]: alloc::alloc::boxed::Box
+#[cfg_attr(
+    kernel,
+    doc = "[`Arc<T>`]: https://rust.docs.kernel.org/kernel/sync/struct.Arc.html"
+)]
+#[cfg_attr(
+    kernel,
+    doc = "[`Box<T>`]: https://rust.docs.kernel.org/kernel/alloc/kbox/struct.Box.html"
+)]
+#[cfg_attr(not(kernel), doc = "[`Arc<T>`]: alloc::alloc::sync::Arc")]
+#[cfg_attr(not(kernel), doc = "[`Box<T>`]: alloc::alloc::boxed::Box")]
 #[must_use = "An initializer must be used in order to create its value."]
 pub unsafe trait PinInit<T: ?Sized, E = Infallible>: Sized {
     /// Initializes `slot`.
@@ -1072,8 +1088,16 @@ where
 /// Contrary to its supertype [`PinInit<T, E>`] the caller is allowed to
 /// move the pointee after initialization.
 ///
-/// [`Arc<T>`]: alloc::alloc::sync::Arc
-/// [`Box<T>`]: alloc::alloc::boxed::Box
+#[cfg_attr(
+    kernel,
+    doc = "[`Arc<T>`]: https://rust.docs.kernel.org/kernel/sync/struct.Arc.html"
+)]
+#[cfg_attr(
+    kernel,
+    doc = "[`Box<T>`]: https://rust.docs.kernel.org/kernel/alloc/kbox/struct.Box.html"
+)]
+#[cfg_attr(not(kernel), doc = "[`Arc<T>`]: alloc::alloc::sync::Arc")]
+#[cfg_attr(not(kernel), doc = "[`Box<T>`]: alloc::alloc::boxed::Box")]
 #[must_use = "An initializer must be used in order to create its value."]
 pub unsafe trait Init<T: ?Sized, E = Infallible>: PinInit<T, E> {
     /// Initializes `slot`.
@@ -1422,16 +1446,13 @@ impl_zeroable! {
     // SAFETY: `T: Zeroable` and `UnsafeCell` is `repr(transparent)`.
     {<T: ?Sized + Zeroable>} UnsafeCell<T>,
 
-    // SAFETY: All zeros is equivalent to `None` (option layout optimization guarantee).
+    // SAFETY: All zeros is equivalent to `None` (option layout optimization guarantee:
+    // https://doc.rust-lang.org/stable/std/option/index.html#representation).
     Option<NonZeroU8>, Option<NonZeroU16>, Option<NonZeroU32>, Option<NonZeroU64>,
     Option<NonZeroU128>, Option<NonZeroUsize>,
     Option<NonZeroI8>, Option<NonZeroI16>, Option<NonZeroI32>, Option<NonZeroI64>,
     Option<NonZeroI128>, Option<NonZeroIsize>,
-
-    // SAFETY: All zeros is equivalent to `None` (option layout optimization guarantee).
-    //
-    // In this case we are allowed to use `T: ?Sized`, since all zeros is the `None` variant.
-    {<T: ?Sized>} Option<NonNull<T>>,
+    {<T>} Option<NonNull<T>>,
 
     // SAFETY: `null` pointer is valid.
     //
