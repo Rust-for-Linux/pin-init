@@ -1,0 +1,169 @@
+permissions:
+  contents: read
+on:
+  pull_request:
+name: CI
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{github.event.pull_request.commits}}
+          ref: ${{github.event.pull_request.head.sha}}
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: git config user.name "github-runner" && git config user.email "<>"
+      - run: git rebase --exec 'cargo fmt --check' --root
+      - run: git rebase --exec 'cd internal && cargo fmt --check' --root
+  readme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{github.event.pull_request.commits}}
+          ref: ${{github.event.pull_request.head.sha}}
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-rdme
+      - run: git config user.name "github-runner" && git config user.email "<>"
+      - run: git rebase --exec 'cargo rdme --check' --root
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{github.event.pull_request.commits}}
+          ref: ${{github.event.pull_request.head.sha}}
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - run: git config user.name "github-runner" && git config user.email "<>"
+      - run: git rebase --exec 'cargo doc --no-deps' --root 
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{github.event.pull_request.commits}}
+          ref: ${{github.event.pull_request.head.sha}}
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+      - run: cargo install cargo-hack
+      - run: git config user.name "github-runner" && git config user.email "<>"
+      - run: git rebase --exec 'cargo hack --clean-per-run --feature-powerset clippy --locked' --exec 'cargo clean' --root
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - run: cargo install cargo-expand
+      - run: git config user.name "github-runner" && git config user.email "<>"
+      - run: git rebase --exec 'cargo test --locked' --root
+  miri:
+    runs-on: ubuntu-latest
+    name: "miri"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{github.event.pull_request.commits}}
+          ref: ${{github.event.pull_request.head.sha}}
+      - run: |
+          echo "NIGHTLY=nightly-$(curl -s https://rust-lang.github.io/rustup-components-history/x86_64-unknown-linux-gnu/miri)" >> $GITHUB_ENV
+      - name: Install ${{env.NIGHTLY}}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{env.NIGHTLY}}
+          components: miri, rust-src
+      - run: cargo install cargo-expand
+      - run: git config user.name "github-runner" && git config user.email "<>"
+      - run: git rebase --exec 'cargo miri test --locked' --root
+      - run: git rebase --exec 'cargo miri test --locked' --root
+        env:
+          MIRIFLAGS: "-Zmiri-tree-borrows"
+      - run: git rebase --exec 'cargo miri test --locked' --root
+        env:
+          MIRIFLAGS: "-Zmiri-strict-provenance"
+      - run: git rebase --exec 'cargo miri test --locked' --root
+        env:
+          MIRIFLAGS: "-Zmiri-tree-borrows -Zmiri-strict-provenance"
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{github.event.pull_request.commits}}
+          ref: ${{github.event.pull_request.head.sha}}
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - name: enable debug symbols
+        run: |
+          sudo apt install llvm
+      - run: git config user.name "github-runner" && git config user.email "<>"
+      # sed because of https://github.com/japaric/rust-san#unrealiable-leaksanitizer
+      - run: git rebase --exec "sed -i '/\[features\]/i [profile.dev]' Cargo.toml && sed -i '/profile.dev/a opt-level = 1' Cargo.toml && cargo test --lib --tests --target x86_64-unknown-linux-gnu && git restore Cargo.toml" --root
+        env:
+          ASAN_OPTIONS: "detect_odr_violation=0:detect_leaks=0"
+          RUSTFLAGS: "--cfg NO_UI_TESTS --cfg NO_ALLOC_FAIL_TESTS -Z sanitizer=address"
+      - run: git rebase --exec 'cargo test --target x86_64-unknown-linux-gnu' --root
+        env:
+          RUSTFLAGS: "--cfg NO_UI_TESTS --cfg NO_ALLOC_FAIL_TESTS -Z sanitizer=leak"
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{github.event.pull_request.commits}}
+          ref: ${{github.event.pull_request.head.sha}}
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-hack
+      - run: git config user.name "github-runner" && git config user.email "<>"
+      - run: git rebase --exec 'cargo hack --clean-per-run --feature-powerset --exclude-features alloc --exclude-features default --version-range 1.82.. --clean-per-version check --locked' --exec 'cargo clean' --root
+  nightly-msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{github.event.pull_request.commits}}
+          ref: ${{github.event.pull_request.head.sha}}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src
+      - run: cargo install cargo-hack
+      - run: cargo install cargo-expand
+      - run: git config user.name "github-runner" && git config user.email "<>"
+      - run: git rebase --exec 'cargo hack --clean-per-run --feature-powerset --version-range 1.78.. --clean-per-version check --locked' --exec 'cargo clean' --root
+        env:
+          RUSTC_BOOTSTRAP: 1
+  os-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{matrix.os}}
+    name: "os-check (${{matrix.os}})"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{github.event.pull_request.commits}}
+          ref: ${{github.event.pull_request.head.sha}}
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - run: cargo install cargo-expand
+      - run: git config user.name "github-runner" && git config user.email "<>"
+      - run: git rebase --exec 'cargo test --locked' --root
+  signed-off-by:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{github.event.pull_request.commits}}
+          ref: ${{github.event.pull_request.head.sha}}
+      - run: git config user.name "github-runner" && git config user.email "<>"
+      - run: git rebase --exec 'git log -1 --pretty=format:%B | grep -q "^Signed-off-by:"' --root

@@ -2,48 +2,32 @@ permissions:
   contents: read
 on:
   push:
-    branches: [main]
+    branches: [main, kernel]
   pull_request:
   schedule:
-    - cron:  '7 7 * * *'
+    - cron: '7 7 * * *'
 name: rolling
 jobs:
-  # https://twitter.com/mycoliza/status/1571295690063753218
   nightly:
     runs-on: ubuntu-latest
     name: ubuntu / nightly
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
-      - name: Install nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rust-src
-      - name: cargo install cargo-expand
-        run: cargo install cargo-expand
-      - name: cargo generate-lockfile
-        if: hashFiles('Cargo.lock') == ''
-        run: cargo generate-lockfile
-      - name: cargo test --locked
-        run: cargo test --locked --all-features --all-targets
-  # https://twitter.com/alcuadrado/status/1571291687837732873
+      - run: cargo install cargo-expand
+      - run: cargo test --locked
   update:
     runs-on: ubuntu-latest
     name: ubuntu / nightly / updated
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
-      - name: Install nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rust-src
-      - name: cargo install cargo-expand
-        run: cargo install cargo-expand
-      - name: cargo update
-        run: cargo update
-      - name: cargo test
-        run: cargo test --locked --all-features --all-targets
+      - run: cargo install cargo-expand
+      - run: cargo update
+      - run: cargo test --locked
         env:
           RUSTFLAGS: -D deprecated
