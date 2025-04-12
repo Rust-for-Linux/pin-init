@@ -1,3 +1,5 @@
+#![cfg_attr(not(RUSTC_LINT_REASONS_IS_STABLE), feature(lint_reasons))]
+
 #[cfg(not(any(miri, NO_UI_TESTS)))]
 #[test]
 fn compile_fail() {

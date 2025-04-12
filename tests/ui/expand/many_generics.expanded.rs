@@ -1,3 +1,4 @@
+#![feature(lint_reasons)]
 use core::{marker::PhantomPinned, pin::Pin};
 use pin_init::*;
 trait Bar<'a, const ID: usize = 0> {
