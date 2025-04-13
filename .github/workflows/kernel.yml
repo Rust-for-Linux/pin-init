@@ -11,13 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        ref: kernel
-        path: pin-init
+        with:
+          ref: kernel
+          path: pin-init
       - uses: actions/checkout@v4
-        repository: git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
-        ref: master
-        path: kernel
-        fetch-depth: 1
+        with:
+          repository: git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+          ref: master
+          path: kernel
+          fetch-depth: 1
       - run: |
           cp -r kernel/rust/pin-init .
           git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]
