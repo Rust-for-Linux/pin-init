@@ -18,4 +18,11 @@ jobs:
       - run: |
           cp -r linux/rust/pin-init .
           cd pin-init
-          git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]
+          if ! git diff --quiet ; then
+              git diff
+              false
+          fi
+          if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+              git status
+              false
+          fi
