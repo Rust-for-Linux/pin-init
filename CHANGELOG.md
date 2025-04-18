@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Wrapper<T>` trait added for creating wrapper structs with a structurally pinned value.
+
 ### Changed
 
 - `InPlaceInit` now only exists when the `alloc` or `std` features are enabled
