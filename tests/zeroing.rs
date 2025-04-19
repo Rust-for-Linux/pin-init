@@ -11,7 +11,7 @@ const MARKS: usize = 64;
 pub struct Foo {
     buf: [u8; 1024 * 1024],
     marks: [*mut u8; MARKS],
-    pos: usize,
+    _pos: usize,
     #[pin]
     _pin: PhantomPinned,
 }
