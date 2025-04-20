@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `InPlaceInit` now only exists when the `alloc` or `std` features are enabled
 - added support for visibility in `Zeroable` derive macro
+- added support for `union`s in `Zeroable` derive macro
 
 ## [0.0.9] - 2024-12-02
 
