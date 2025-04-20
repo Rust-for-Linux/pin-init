@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `Wrapper<T>` trait added for creating wrapper structs with a structurally pinned value.
+- `MaybeZeroable` derive macro to try to derive `Zeroable`, but not error if not all fields
+  implement it.
 
 ### Changed
 
