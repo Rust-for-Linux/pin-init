@@ -93,7 +93,7 @@ mod pthread_mtx {
                     if ret != 0 {
                         return Err(Error::IO(std::io::Error::from_raw_os_error(ret)));
                     }
-                    Ok(())
+                    Ok(InitOk::new())
                 };
                 // SAFETY: mutex has been initialized
                 unsafe { pin_init_from_closure(init) }

@@ -298,8 +298,8 @@
 //!             // Change the return type from `__InitOk` to `()`.
 //!             let init = move |
 //!                 slot,
-//!             | -> ::core::result::Result<(), ::core::convert::Infallible> {
-//!                 init(slot).map(|__InitOk| ())
+//!             | -> ::core::result::Result<$crate::InitOk<_>, ::core::convert::Infallible> {
+//!                 init(slot).map(|__InitOk| $crate::InitOk::new())
 //!             };
 //!             // Construct the initializer.
 //!             let init = unsafe {
@@ -488,8 +488,8 @@
 //!     });
 //!     let init = move |
 //!         slot,
-//!     | -> ::core::result::Result<(), ::core::convert::Infallible> {
-//!         init(slot).map(|__InitOk| ())
+//!     | -> ::core::result::Result<$crate::InitOk<_>, ::core::convert::Infallible> {
+//!         init(slot).map(|__InitOk| $crate::InitOk::new())
 //!     };
 //!     let init = unsafe {
 //!         ::pin_init::pin_init_from_closure::<_, ::core::convert::Infallible>(init)
@@ -1004,7 +1004,7 @@ macro_rules! __pin_data {
                     self,
                     slot: *mut $p_type,
                     init: impl $crate::PinInit<$p_type, E>,
-                ) -> ::core::result::Result<(), E> {
+                ) -> ::core::result::Result<$crate::InitOk<$p_type>, E> {
                     // SAFETY: TODO.
                     unsafe { $crate::PinInit::__pinned_init(init, slot) }
                 }
@@ -1015,7 +1015,7 @@ macro_rules! __pin_data {
                     self,
                     slot: *mut $type,
                     init: impl $crate::Init<$type, E>,
-                ) -> ::core::result::Result<(), E> {
+                ) -> ::core::result::Result<$crate::InitOk<$type>, E> {
                     // SAFETY: TODO.
                     unsafe { $crate::Init::__init(init, slot) }
                 }
@@ -1185,8 +1185,8 @@ macro_rules! __init_internal {
                 Ok(__InitOk)
             }
         );
-        let init = move |slot| -> ::core::result::Result<(), $err> {
-            init(slot).map(|__InitOk| ())
+        let init = move |slot| -> ::core::result::Result<$crate::InitOk<_>, $err> {
+            init(slot).map(|__InitOk| $crate::InitOk::new())
         };
         // SAFETY: TODO.
         let init = unsafe { $crate::$construct_closure::<_, $err>(init) };

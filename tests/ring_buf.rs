@@ -48,7 +48,7 @@ impl<T, const SIZE: usize> RingBuffer<T, SIZE> {
         assert!(SIZE > 0);
         pin_init!(&this in Self {
             // SAFETY: The elements of the array can be uninitialized.
-            buffer <- unsafe { init_from_closure(|_| Ok::<_, Infallible>(())) },
+            buffer <- unsafe { init_from_closure(|_| Ok::<_, Infallible>(InitOk::new())) },
             // SAFETY: `this` is a valid pointer.
             head: unsafe { addr_of_mut!((*this.as_ptr()).buffer).cast::<T>() },
             tail: unsafe { addr_of_mut!((*this.as_ptr()).buffer).cast::<T>() },
@@ -100,7 +100,7 @@ impl<T, const SIZE: usize> RingBuffer<T, SIZE> {
             // SAFETY: `tail` always points to a valid element, or is the same as `head`.
             unsafe { ptr::copy_nonoverlapping(this.tail, slot, 1) };
             this.tail = unsafe { this.advance(this.tail) };
-            Ok(())
+            Ok(InitOk::new())
         };
         // SAFETY: the above initializer is correct.
         Some(unsafe { init_from_closure(remove_init) })

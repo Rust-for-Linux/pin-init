@@ -12,6 +12,7 @@ use core::{
     pin::Pin,
     sync::atomic::{AtomicBool, Ordering},
 };
+use std::convert::Infallible;
 #[cfg(feature = "std")]
 use std::{
     sync::Arc,
@@ -82,7 +83,8 @@ impl<T> CMutex<T> {
             locked: Cell::new(false),
             data <- unsafe {
                 pin_init_from_closure(|slot: *mut UnsafeCell<T>| {
-                    val.__pinned_init(slot.cast::<T>())
+                    let _meta = val.__pinned_init(slot.cast::<T>())?;
+                    Ok::<_, Infallible>(InitOk::new())
                 })
             },
         })

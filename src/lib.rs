@@ -170,7 +170,7 @@
 //!
 //! ```rust
 //! # #![feature(extern_types)]
-//! use pin_init::{pin_data, pinned_drop, PinInit, PinnedDrop, pin_init_from_closure};
+//! use pin_init::{pin_data, pinned_drop, PinInit, PinnedDrop, pin_init_from_closure, InitOk};
 //! use core::{
 //!     ptr::addr_of_mut,
 //!     marker::PhantomPinned,
@@ -225,7 +225,7 @@
 //!                     Err(err)
 //!                 } else {
 //!                     // All fields of `RawFoo` have been initialized, since `_p` is a ZST.
-//!                     Ok(())
+//!                     Ok(InitOk::new())
 //!                 }
 //!             })
 //!         }
@@ -966,6 +966,23 @@ macro_rules! assert_pinned {
     };
 }
 
+/// Initialization completed successfully.
+pub struct InitOk<T: ?Sized> {
+    _phantom: PhantomData<fn(T) -> T>,
+}
+
+impl<T: ?Sized> InitOk<T> {
+    ///
+    pub fn new() -> Self
+    where
+        T: Sized,
+    {
+        Self {
+            _phantom: PhantomData,
+        }
+    }
+}
+
 /// A pin-initializer for the type `T`.
 ///
 /// To use this initializer, you will need a suitable memory location that can hold a `T`. This can
@@ -1006,7 +1023,7 @@ pub unsafe trait PinInit<T: ?Sized, E = Infallible>: Sized {
     /// - the caller does not touch `slot` when `Err` is returned, they are only permitted to
     ///   deallocate.
     /// - `slot` will not move until it is dropped, i.e. it will be pinned.
-    unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), E>;
+    unsafe fn __pinned_init(self, slot: *mut T) -> Result<InitOk<T>, E>;
 
     /// First initializes the value using `self` then calls the function `f` with the initialized
     /// value.
@@ -1044,9 +1061,9 @@ pub struct ChainPinInit<I, F, T: ?Sized, E>(I, F, __internal::Invariant<(E, T)>)
 unsafe impl<T: ?Sized, E, I, F> PinInit<T, E> for ChainPinInit<I, F, T, E>
 where
     I: PinInit<T, E>,
-    F: FnOnce(Pin<&mut T>) -> Result<(), E>,
+    F: FnOnce(Pin<&mut T>) -> Result<InitOk<T>, E>,
 {
-    unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), E> {
+    unsafe fn __pinned_init(self, slot: *mut T) -> Result<InitOk<T>, E> {
         // SAFETY: All requirements fulfilled since this function is `__pinned_init`.
         unsafe { self.0.__pinned_init(slot)? };
         // SAFETY: The above call initialized `slot` and we still have unique access.
@@ -1104,7 +1121,7 @@ pub unsafe trait Init<T: ?Sized, E = Infallible>: PinInit<T, E> {
     /// - `slot` is a valid pointer to uninitialized memory.
     /// - the caller does not touch `slot` when `Err` is returned, they are only permitted to
     ///   deallocate.
-    unsafe fn __init(self, slot: *mut T) -> Result<(), E>;
+    unsafe fn __init(self, slot: *mut T) -> Result<InitOk<T>, E>;
 
     /// First initializes the value using `self` then calls the function `f` with the initialized
     /// value.
@@ -1151,9 +1168,9 @@ pub struct ChainInit<I, F, T: ?Sized, E>(I, F, __internal::Invariant<(E, T)>);
 unsafe impl<T: ?Sized, E, I, F> Init<T, E> for ChainInit<I, F, T, E>
 where
     I: Init<T, E>,
-    F: FnOnce(&mut T) -> Result<(), E>,
+    F: FnOnce(&mut T) -> Result<InitOk<T>, E>,
 {
-    unsafe fn __init(self, slot: *mut T) -> Result<(), E> {
+    unsafe fn __init(self, slot: *mut T) -> Result<InitOk<T>, E> {
         // SAFETY: All requirements fulfilled since this function is `__init`.
         unsafe { self.0.__pinned_init(slot)? };
         // SAFETY: The above call initialized `slot` and we still have unique access.
@@ -1167,9 +1184,9 @@ where
 unsafe impl<T: ?Sized, E, I, F> PinInit<T, E> for ChainInit<I, F, T, E>
 where
     I: Init<T, E>,
-    F: FnOnce(&mut T) -> Result<(), E>,
+    F: FnOnce(&mut T) -> Result<InitOk<T>, E>,
 {
-    unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), E> {
+    unsafe fn __pinned_init(self, slot: *mut T) -> Result<InitOk<T>, E> {
         // SAFETY: `__init` has less strict requirements compared to `__pinned_init`.
         unsafe { self.__init(slot) }
     }
@@ -1189,7 +1206,7 @@ where
 /// - while constructing the `T` at `slot` it upholds the pinning invariants of `T`.
 #[inline]
 pub const unsafe fn pin_init_from_closure<T: ?Sized, E>(
-    f: impl FnOnce(*mut T) -> Result<(), E>,
+    f: impl FnOnce(*mut T) -> Result<InitOk<T>, E>,
 ) -> impl PinInit<T, E> {
     __internal::InitClosure(f, PhantomData)
 }
@@ -1208,7 +1225,7 @@ pub const unsafe fn pin_init_from_closure<T: ?Sized, E>(
 /// - while constructing the `T` at `slot` it upholds the pinning invariants of `T`.
 #[inline]
 pub const unsafe fn init_from_closure<T: ?Sized, E>(
-    f: impl FnOnce(*mut T) -> Result<(), E>,
+    f: impl FnOnce(*mut T) -> Result<InitOk<T>, E>,
 ) -> impl Init<T, E> {
     __internal::InitClosure(f, PhantomData)
 }
@@ -1223,7 +1240,12 @@ pub const unsafe fn init_from_closure<T: ?Sized, E>(
 pub const unsafe fn cast_pin_init<T, U, E>(init: impl PinInit<T, E>) -> impl PinInit<U, E> {
     // SAFETY: initialization delegated to a valid initializer. Cast is valid by function safety
     // requirements.
-    let res = unsafe { pin_init_from_closure(|ptr: *mut U| init.__pinned_init(ptr.cast::<T>())) };
+    let res = unsafe {
+        pin_init_from_closure(|ptr: *mut U| {
+            let _meta = init.__pinned_init(ptr.cast::<T>());
+            Ok(InitOk::new())
+        })
+    };
     // FIXME: remove the let statement once the nightly-MSRV allows it (1.78 otherwise encounters a
     // cycle when computing the type returned by this function)
     res
@@ -1239,7 +1261,12 @@ pub const unsafe fn cast_pin_init<T, U, E>(init: impl PinInit<T, E>) -> impl Pin
 pub const unsafe fn cast_init<T, U, E>(init: impl Init<T, E>) -> impl Init<U, E> {
     // SAFETY: initialization delegated to a valid initializer. Cast is valid by function safety
     // requirements.
-    let res = unsafe { init_from_closure(|ptr: *mut U| init.__init(ptr.cast::<T>())) };
+    let res = unsafe {
+        init_from_closure(|ptr: *mut U| {
+            let _meta = init.__init(ptr.cast::<T>())?;
+            Ok(InitOk::new())
+        })
+    };
     // FIXME: remove the let statement once the nightly-MSRV allows it (1.78 otherwise encounters a
     // cycle when computing the type returned by this function)
     res
@@ -1251,7 +1278,7 @@ pub const unsafe fn cast_init<T, U, E>(init: impl Init<T, E>) -> impl Init<U, E>
 #[inline]
 pub fn uninit<T, E>() -> impl Init<MaybeUninit<T>, E> {
     // SAFETY: The memory is allowed to be uninitialized.
-    unsafe { init_from_closure(|_| Ok(())) }
+    unsafe { init_from_closure(|_| Ok(InitOk::new())) }
 }
 
 /// Initializes an array by initializing each element via the provided initializer.
@@ -1285,7 +1312,7 @@ where
                 return Err(e);
             }
         }
-        Ok(())
+        Ok(InitOk::new())
     };
     // SAFETY: The initializer above initializes every element of the array. On failure it drops
     // any initialized elements and returns `Err`.
@@ -1328,7 +1355,7 @@ where
                 return Err(e);
             }
         }
-        Ok(())
+        Ok(InitOk::new())
     };
     // SAFETY: The initializer above initializes every element of the array. On failure it drops
     // any initialized elements and returns `Err`.
@@ -1337,16 +1364,16 @@ where
 
 // SAFETY: Every type can be initialized by-value.
 unsafe impl<T, E> Init<T, E> for T {
-    unsafe fn __init(self, slot: *mut T) -> Result<(), E> {
+    unsafe fn __init(self, slot: *mut T) -> Result<InitOk<T>, E> {
         // SAFETY: TODO.
         unsafe { slot.write(self) };
-        Ok(())
+        Ok(InitOk::new())
     }
 }
 
 // SAFETY: Every type can be initialized by-value. `__pinned_init` calls `__init`.
 unsafe impl<T, E> PinInit<T, E> for T {
-    unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), E> {
+    unsafe fn __pinned_init(self, slot: *mut T) -> Result<InitOk<T>, E> {
         // SAFETY: TODO.
         unsafe { self.__init(slot) }
     }
@@ -1439,7 +1466,7 @@ pub fn zeroed<T: Zeroable>() -> impl Init<T> {
     unsafe {
         init_from_closure(|slot: *mut T| {
             slot.write_bytes(0, 1);
-            Ok(())
+            Ok(InitOk::new())
         })
     }
 }

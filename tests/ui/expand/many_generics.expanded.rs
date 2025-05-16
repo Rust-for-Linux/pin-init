@@ -50,21 +50,21 @@ const _: () = {
             self,
             slot: *mut PhantomPinned,
             init: impl ::pin_init::PinInit<PhantomPinned, E>,
-        ) -> ::core::result::Result<(), E> {
+        ) -> ::core::result::Result<::pin_init::InitOk<PhantomPinned>, E> {
             unsafe { ::pin_init::PinInit::__pinned_init(init, slot) }
         }
         unsafe fn _array<E>(
             self,
             slot: *mut [u8; 1024 * 1024],
             init: impl ::pin_init::Init<[u8; 1024 * 1024], E>,
-        ) -> ::core::result::Result<(), E> {
+        ) -> ::core::result::Result<::pin_init::InitOk<[u8; 1024 * 1024]>, E> {
             unsafe { ::pin_init::Init::__init(init, slot) }
         }
         unsafe fn r<E>(
             self,
             slot: *mut &'b mut [&'a mut T; SIZE],
             init: impl ::pin_init::Init<&'b mut [&'a mut T; SIZE], E>,
-        ) -> ::core::result::Result<(), E> {
+        ) -> ::core::result::Result<::pin_init::InitOk<&'b mut [&'a mut T; SIZE]>, E> {
             unsafe { ::pin_init::Init::__init(init, slot) }
         }
     }

@@ -24,8 +24,8 @@ fn main() {
         );
         let init = move |
             slot,
-        | -> ::core::result::Result<(), ::core::convert::Infallible> {
-            init(slot).map(|__InitOk| ())
+        | -> ::core::result::Result<::pin_init::InitOk<_>, ::core::convert::Infallible> {
+            init(slot).map(|__InitOk| ::pin_init::InitOk::new())
         };
         let init = unsafe {
             ::pin_init::init_from_closure::<_, ::core::convert::Infallible>(init)

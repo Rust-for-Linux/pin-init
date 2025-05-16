@@ -39,7 +39,7 @@ pub trait InPlaceInit<T>: Sized {
         // SAFETY: We delegate to `init` and only change the error type.
         let init = unsafe {
             pin_init_from_closure(|slot| match init.__pinned_init(slot) {
-                Ok(()) => Ok(()),
+                Ok(ok) => Ok(ok),
                 Err(i) => match i {},
             })
         };
@@ -56,7 +56,7 @@ pub trait InPlaceInit<T>: Sized {
         // SAFETY: We delegate to `init` and only change the error type.
         let init = unsafe {
             init_from_closure(|slot| match init.__init(slot) {
-                Ok(()) => Ok(()),
+                Ok(meta) => Ok(meta),
                 Err(i) => match i {},
             })
         };

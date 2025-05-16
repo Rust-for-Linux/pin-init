@@ -26,10 +26,10 @@ pub(crate) struct InitClosure<F, T: ?Sized, E>(pub(crate) F, pub(crate) Invarian
 // `__init` invariants.
 unsafe impl<T: ?Sized, F, E> Init<T, E> for InitClosure<F, T, E>
 where
-    F: FnOnce(*mut T) -> Result<(), E>,
+    F: FnOnce(*mut T) -> Result<InitOk<T>, E>,
 {
     #[inline]
-    unsafe fn __init(self, slot: *mut T) -> Result<(), E> {
+    unsafe fn __init(self, slot: *mut T) -> Result<InitOk<T>, E> {
         (self.0)(slot)
     }
 }
@@ -38,10 +38,10 @@ where
 // `__pinned_init` invariants.
 unsafe impl<T: ?Sized, F, E> PinInit<T, E> for InitClosure<F, T, E>
 where
-    F: FnOnce(*mut T) -> Result<(), E>,
+    F: FnOnce(*mut T) -> Result<InitOk<T>, E>,
 {
     #[inline]
-    unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), E> {
+    unsafe fn __pinned_init(self, slot: *mut T) -> Result<InitOk<T>, E> {
         (self.0)(slot)
     }
 }
@@ -287,7 +287,7 @@ impl<T: ?Sized> Default for AlwaysFail<T> {
 
 // SAFETY: `__pinned_init` always fails, which is always okay.
 unsafe impl<T: ?Sized> PinInit<T, ()> for AlwaysFail<T> {
-    unsafe fn __pinned_init(self, _slot: *mut T) -> Result<(), ()> {
+    unsafe fn __pinned_init(self, _slot: *mut T) -> Result<InitOk<T>, ()> {
         Err(())
     }
 }
