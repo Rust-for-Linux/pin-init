@@ -18,10 +18,11 @@ paste = "1.0"
 pin-init-internal = { path = "./internal", version = "=0.0.5" }
 
 [features]
-default = ["std", "alloc"]
+default = ["std", "alloc", "dyn"]
 std = []
 alloc = []
 unsafe-pinned = []
+dyn = []
 
 [build-dependencies]
 rustc_version = "0.4"

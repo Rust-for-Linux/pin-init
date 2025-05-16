@@ -279,6 +279,7 @@
     all(feature = "unsafe-pinned", CONFIG_RUSTC_HAS_UNSAFE_PINNED),
     feature(unsafe_pinned)
 )]
+#![cfg_attr(feature = "dyn", feature(ptr_metadata))]
 
 use core::{
     cell::UnsafeCell,
@@ -297,6 +298,8 @@ pub mod macros;
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 mod alloc;
+#[cfg(all(any(feature = "std", feature = "alloc"), feature = "dyn"))]
+pub use alloc::DynInPlaceInit;
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub use alloc::InPlaceInit;
 
@@ -967,6 +970,13 @@ macro_rules! assert_pinned {
 }
 
 /// Initialization completed successfully.
+#[cfg(feature = "dyn")]
+pub struct InitOk<T: ?Sized + ptr::Pointee> {
+    meta: T::Metadata,
+    _phantom: PhantomData<fn(T) -> T>,
+}
+
+#[cfg(not(feature = "dyn"))]
 pub struct InitOk<T: ?Sized> {
     _phantom: PhantomData<fn(T) -> T>,
 }
@@ -978,6 +988,8 @@ impl<T: ?Sized> InitOk<T> {
         T: Sized,
     {
         Self {
+            #[cfg(feature = "dyn")]
+            meta: (),
             _phantom: PhantomData,
         }
     }
@@ -1189,6 +1201,26 @@ where
     unsafe fn __pinned_init(self, slot: *mut T) -> Result<InitOk<T>, E> {
         // SAFETY: `__init` has less strict requirements compared to `__pinned_init`.
         unsafe { self.__init(slot) }
+    }
+}
+
+/// Dynamic initializer.
+#[cfg(feature = "dyn")]
+pub struct DynInit<D: ?Sized + ptr::Pointee, Args, E> {
+    layout: core::alloc::Layout,
+    init: unsafe fn(*mut (), Args) -> Result<InitOk<D>, E>,
+}
+
+#[cfg(feature = "dyn")]
+impl<D: ?Sized + ptr::Pointee, Args, E> DynInit<D, Args, E> {
+    ///
+    pub unsafe fn init(self, slot: *mut (), args: Args) -> Result<D::Metadata, E> {
+        unsafe { (self.init)(slot, args) }.map(|m| m.meta)
+    }
+
+    ///
+    pub fn layout(&self) -> core::alloc::Layout {
+        self.layout
     }
 }
 

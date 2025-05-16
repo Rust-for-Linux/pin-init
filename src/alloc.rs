@@ -4,7 +4,7 @@
 use alloc::{boxed::Box, sync::Arc};
 #[cfg(feature = "alloc")]
 use core::alloc::AllocError;
-use core::{mem::MaybeUninit, pin::Pin};
+use core::{mem::MaybeUninit, pin::Pin, ptr};
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
@@ -62,6 +62,15 @@ pub trait InPlaceInit<T>: Sized {
         };
         Self::try_init(init)
     }
+}
+
+///
+#[cfg(feature = "dyn")]
+pub trait DynInPlaceInit<T: ?Sized>: Sized {
+    ///
+    fn dyn_init<E, Args>(init: crate::DynInit<T, Args, E>, args: Args) -> Result<Self, E>
+    where
+        E: From<AllocError>;
 }
 
 #[cfg(feature = "alloc")]
@@ -152,5 +161,21 @@ impl<T> InPlaceWrite<T> for Box<MaybeUninit<T>> {
         unsafe { init.__pinned_init(slot)? };
         // SAFETY: All fields have been initialized.
         Ok(unsafe { self.assume_init() }.into())
+    }
+}
+
+impl<T: ?Sized> DynInPlaceInit<T> for Box<T> {
+    fn dyn_init<E, Args>(init: crate::DynInit<T, Args, E>, args: Args) -> Result<Self, E>
+    where
+        E: From<AllocError>,
+    {
+        use alloc::alloc::{Allocator, Global};
+        let layout = init.layout();
+
+        let ptr = Global.allocate(layout)?.as_ptr().cast();
+
+        let meta = unsafe { init.init(ptr, args)? };
+
+        unsafe { Ok(Box::from_raw_in(ptr::from_raw_parts_mut(ptr, meta), Global)) }
     }
 }
