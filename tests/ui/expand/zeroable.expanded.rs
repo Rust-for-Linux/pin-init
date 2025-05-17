@@ -28,14 +28,18 @@ struct WithGenerics<'a, T, U: Trait> {
     u: &'a U,
 }
 #[automatically_derived]
-unsafe impl<
-    'a,
+unsafe impl<'a, T, U: Trait> ::pin_init::Zeroable for WithGenerics<'a, T, U>
+where
     T: ::pin_init::Zeroable,
-    U: ::pin_init::Zeroable + Trait,
-> ::pin_init::Zeroable for WithGenerics<'a, T, U> {}
+    U: ::pin_init::Zeroable,
+{}
 const _: () = {
     fn assert_zeroable<T: ?::core::marker::Sized + ::pin_init::Zeroable>() {}
-    fn ensure_zeroable<'a, T: ::pin_init::Zeroable, U: ::pin_init::Zeroable + Trait>() {
+    fn ensure_zeroable<'a, T, U: Trait>()
+    where
+        T: ::pin_init::Zeroable,
+        U: ::pin_init::Zeroable,
+    {
         assert_zeroable::<T>();
         assert_zeroable::<&'a U>();
     }
