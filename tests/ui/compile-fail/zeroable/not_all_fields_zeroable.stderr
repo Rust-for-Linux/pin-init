@@ -9,7 +9,7 @@ note: required by a bound in `assert_zeroable`
   |
 4 | #[derive(Zeroable)]
   |          ^^^^^^^^ required by this bound in `assert_zeroable`
-  = note: this error originates in the macro `::pin_init::__derive_zeroable` which comes from the expansion of the derive macro `Zeroable` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this error originates in the derive macro `Zeroable` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider removing the leading `&`-reference
   |
 7 -     b: &'static Foo,
