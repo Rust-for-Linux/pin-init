@@ -24,13 +24,25 @@ use proc_macro::TokenStream;
 #[macro_use]
 #[cfg_attr(not(kernel), rustfmt::skip)]
 mod quote;
-#[cfg(not(kernel))]
-#[macro_use]
-extern crate quote;
-
+#[cfg(kernel)]
 mod helpers;
+#[cfg(kernel)]
 mod pin_data;
+#[cfg(kernel)]
 mod pinned_drop;
+#[cfg(kernel)]
+mod zeroable;
+
+#[cfg(not(kernel))]
+mod init;
+#[cfg(not(kernel))]
+#[path = "syn_pin_data.rs"]
+mod pin_data;
+#[cfg(not(kernel))]
+#[path = "syn_pinned_drop.rs"]
+mod pinned_drop;
+#[cfg(not(kernel))]
+#[path = "syn_zeroable.rs"]
 mod zeroable;
 
 #[proc_macro_attribute]
@@ -51,4 +63,80 @@ pub fn derive_zeroable(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(MaybeZeroable)]
 pub fn maybe_derive_zeroable(input: TokenStream) -> TokenStream {
     zeroable::maybe_derive(input.into()).into()
+}
+
+#[cfg(kernel)]
+#[proc_macro]
+pub fn pin_init(input: TokenStream) -> TokenStream {
+    quote!(::pin_init::__internal_pin_init!(#input))
+}
+
+#[cfg(not(kernel))]
+#[proc_macro]
+pub fn pin_init(input: TokenStream) -> TokenStream {
+    use syn::parse_macro_input;
+    init::init(
+        parse_macro_input!(input as init::InPlaceInitializer),
+        true,
+        true,
+    )
+    .unwrap_or_else(|e| e.into_compile_error())
+    .into()
+}
+
+#[cfg(kernel)]
+#[proc_macro]
+pub fn init(input: TokenStream) -> TokenStream {
+    quote!(::pin_init::__internal_init!(#input))
+}
+
+#[cfg(not(kernel))]
+#[proc_macro]
+pub fn init(input: TokenStream) -> TokenStream {
+    use syn::parse_macro_input;
+    init::init(
+        parse_macro_input!(input as init::InPlaceInitializer),
+        true,
+        false,
+    )
+    .unwrap_or_else(|e| e.into_compile_error())
+    .into()
+}
+
+#[cfg(kernel)]
+#[proc_macro]
+pub fn try_pin_init(input: TokenStream) -> TokenStream {
+    quote!(::pin_init::__internal_try_pin_init!(#input))
+}
+
+#[cfg(not(kernel))]
+#[proc_macro]
+pub fn try_pin_init(input: TokenStream) -> TokenStream {
+    use syn::parse_macro_input;
+    init::init(
+        parse_macro_input!(input as init::InPlaceInitializer),
+        false,
+        true,
+    )
+    .unwrap_or_else(|e| e.into_compile_error())
+    .into()
+}
+
+#[cfg(kernel)]
+#[proc_macro]
+pub fn try_init(input: TokenStream) -> TokenStream {
+    quote!(::pin_init::__internal_try_init!(#input))
+}
+
+#[cfg(not(kernel))]
+#[proc_macro]
+pub fn try_init(input: TokenStream) -> TokenStream {
+    use syn::parse_macro_input;
+    init::init(
+        parse_macro_input!(input as init::InPlaceInitializer),
+        false,
+        false,
+    )
+    .unwrap_or_else(|e| e.into_compile_error())
+    .into()
 }
