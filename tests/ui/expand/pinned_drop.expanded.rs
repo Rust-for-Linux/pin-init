@@ -4,32 +4,6 @@ struct Foo {
     array: [u8; 1024 * 1024],
     _pin: PhantomPinned,
 }
-#[doc(hidden)]
-struct FooProjection<'__pin> {
-    _pin: ::core::pin::Pin<&'__pin mut PhantomPinned>,
-    array: &'__pin mut [u8; 1024 * 1024],
-    ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut ()>,
-}
-impl Foo {
-    /// Pin-projects all fields of `Self`.
-    ///
-    /// These fields are structurally pinned:
-    /// - `_pin`
-    ///
-    /// These fields are **not** structurally pinned:
-    /// - `array`
-    #[inline]
-    fn project<'__pin>(
-        self: ::core::pin::Pin<&'__pin mut Self>,
-    ) -> FooProjection<'__pin> {
-        let this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
-        FooProjection {
-            _pin: unsafe { ::core::pin::Pin::new_unchecked(&mut this._pin) },
-            array: &mut this.array,
-            ___pin_phantom_data: ::core::marker::PhantomData,
-        }
-    }
-}
 const _: () = {
     struct __ThePinData {
         __phantom: ::core::marker::PhantomData<fn(Foo) -> Foo>,
@@ -54,7 +28,7 @@ const _: () = {
             self,
             slot: &'__slot mut PhantomPinned,
         ) -> ::core::pin::Pin<&'__slot mut PhantomPinned> {
-            ::core::pin::Pin::new_unchecked(slot)
+            unsafe { ::core::pin::Pin::new_unchecked(slot) }
         }
         unsafe fn array<E>(
             self,
