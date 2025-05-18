@@ -1,3 +1,5 @@
+#![feature(ptr_metadata)]
+
 use pin_init::{dyn_init, DynInPlaceInit};
 
 pub trait Bar {
@@ -21,13 +23,13 @@ impl Bar for Baz {
 impl Foo for Baz {
     #[dyn_init]
     fn bar(&self, arg: i32) -> impl Bar {
-        Baz(self.0 + arg)
+        return Baz(self.0 + arg);
     }
 }
 
 fn main() {
     let foo: Box<dyn Foo> = Box::new(Baz(21));
-    let bar = Box::dyn_init(foo.dyn_foo(21)).unwrap();
+    let bar = Box::dyn_init(foo.dyn_bar(21));
     println!("{}", bar.value());
 }
 

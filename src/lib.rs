@@ -1210,18 +1210,26 @@ where
 
 /// Dynamic initializer.
 #[cfg(feature = "dyn")]
-pub struct DynInit<D: ?Sized + ptr::Pointee, Args, E> {
+pub struct DynInit<D: ?Sized + ptr::Pointee, Args> {
     layout: core::alloc::Layout,
     args: Args,
-    init: unsafe fn(*mut (), Args) -> Result<InitOk<D>, E>,
+    init: unsafe fn(*mut (), Args) -> InitOk<D>,
 }
 
 #[cfg(feature = "dyn")]
-impl<D: ?Sized + ptr::Pointee, Args, E> DynInit<D, Args, E> {
+impl<D: ?Sized + ptr::Pointee, Args> DynInit<D, Args> {
     ///
-    pub unsafe fn init(self, slot: *mut ()) -> Result<D::Metadata, E> {
+    pub unsafe fn new(
+        init: unsafe fn(*mut (), Args) -> InitOk<D>,
+        args: Args,
+        layout: core::alloc::Layout,
+    ) -> Self {
+        Self { init, args, layout }
+    }
+    ///
+    pub unsafe fn init(self, slot: *mut ()) -> Result<D::Metadata, Infallible> {
         let args = self.args;
-        unsafe { (self.init)(slot, args) }.map(|m| m.meta)
+        Ok(unsafe { (self.init)(slot, args) }.meta)
     }
 
     ///
