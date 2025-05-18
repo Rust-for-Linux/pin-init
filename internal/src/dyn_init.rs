@@ -1,16 +1,11 @@
-use std::mem;
-
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    parse::Nothing, parse_quote, spanned::Spanned, visit_mut::VisitMut, Block, FnArg, Pat,
-    PatIdent, PatType, Result, ReturnType, Signature, Stmt, Token, TraitItemFn, Type,
-    TypeImplTrait, TypePath, TypeTraitObject,
+    parse::Nothing, parse_quote, spanned::Spanned, Block, FnArg, Pat, PatIdent, Result, ReturnType,
+    Signature, Stmt, Token, TraitItemFn, Type, TypeImplTrait, TypePath, TypeTraitObject,
 };
 
 pub fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream> {
-    let e: syn::Expr = parse_quote!(self);
-    println!("{e:?}");
     let mut fun: TraitItemFn = syn::parse2(item)?;
     let _: Nothing = syn::parse2(args)?;
     let normal = normal(fun.clone());
@@ -78,7 +73,7 @@ fn set_output(fun: &mut TraitItemFn) -> OutputSet {
                 _ => todo!("expected `-> impl Trait`"),
             };
             let mut recv = None;
-            let args = fun
+            let mut args = fun
                 .sig
                 .inputs
                 .iter()
@@ -92,8 +87,8 @@ fn set_output(fun: &mut TraitItemFn) -> OutputSet {
                 })
                 .collect::<Vec<_>>();
             let (raw_recv, real_recv, recv_span) = recv.unwrap();
-            let error: Type = parse_quote!(::core::convert::Infallible);
-            **ty = parse_quote!(::pin_init::DynInit<#dyn_, (#(#args),*)>);
+            let this = args.remove(0);
+            **ty = parse_quote!(::pin_init::DynInit<#dyn_, (#this, #(#args),*)>);
             OutputSet {
                 raw_recv,
                 real_recv,
@@ -123,7 +118,7 @@ fn is_self_ty(ty: &Type) -> bool {
 
 fn set_body(
     body: &mut Block,
-    (raw, real): (Type, Type),
+    (raw, _real): (Type, Type),
     sig: &mut Signature,
     dyn_: Type,
     recv_span: Span,
@@ -165,7 +160,7 @@ fn set_body(
             slot: *mut (),
             (#this, #(#args),*): (#raw, #(#arg_types),*),
         | -> ::pin_init::InitOk<#dyn_> {
-            let #this = unsafe { &*(#this as *const Baz) };
+            let #this = unsafe { &*(#this as *const Self) };
             let mut ptr = ::core::ptr::null_mut();
             let value = Self::#name(#this, #(#args),*);
             if false {
@@ -197,22 +192,4 @@ fn set_body(
         }),
         None,
     ));
-}
-
-struct SelfReplacer(syn::Ident);
-
-impl VisitMut for SelfReplacer {
-    fn visit_expr_path_mut(&mut self, i: &mut syn::ExprPath) {
-        if i.qself.is_none() && i.path.is_ident("self") {
-            i.path = syn::PathSegment {
-                ident: self.0.clone(),
-                arguments: syn::PathArguments::None,
-            }
-            .into();
-        }
-    }
-
-    fn visit_item_mut(&mut self, _: &mut syn::Item) {
-        // Do not descend into items, since items reset/change what `Self` refers to.
-    }
 }
