@@ -34,6 +34,8 @@ mod pinned_drop;
 mod zeroable;
 
 #[cfg(not(kernel))]
+mod dyn_init;
+#[cfg(not(kernel))]
 mod init;
 #[cfg(not(kernel))]
 #[path = "syn_pin_data.rs"]
@@ -63,6 +65,14 @@ pub fn derive_zeroable(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(MaybeZeroable)]
 pub fn maybe_derive_zeroable(input: TokenStream) -> TokenStream {
     zeroable::maybe_derive(input.into()).into()
+}
+
+#[cfg(not(kernel))]
+#[proc_macro_attribute]
+pub fn dyn_init(args: TokenStream, item: TokenStream) -> TokenStream {
+    dyn_init::expand(args.into(), item.into())
+        .unwrap_or_else(|e| e.into_compile_error())
+        .into()
 }
 
 #[cfg(kernel)]

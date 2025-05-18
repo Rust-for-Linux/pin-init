@@ -461,6 +461,10 @@ pub use ::pin_init_internal::Zeroable;
 /// ```
 pub use ::pin_init_internal::MaybeZeroable;
 
+///
+#[cfg(feature = "dyn")]
+pub use ::pin_init_internal::dyn_init;
+
 /// Initialize and pin a type directly on the stack.
 ///
 /// # Examples
@@ -1208,13 +1212,15 @@ where
 #[cfg(feature = "dyn")]
 pub struct DynInit<D: ?Sized + ptr::Pointee, Args, E> {
     layout: core::alloc::Layout,
+    args: Args,
     init: unsafe fn(*mut (), Args) -> Result<InitOk<D>, E>,
 }
 
 #[cfg(feature = "dyn")]
 impl<D: ?Sized + ptr::Pointee, Args, E> DynInit<D, Args, E> {
     ///
-    pub unsafe fn init(self, slot: *mut (), args: Args) -> Result<D::Metadata, E> {
+    pub unsafe fn init(self, slot: *mut ()) -> Result<D::Metadata, E> {
+        let args = self.args;
         unsafe { (self.init)(slot, args) }.map(|m| m.meta)
     }
 

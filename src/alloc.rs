@@ -68,7 +68,7 @@ pub trait InPlaceInit<T>: Sized {
 #[cfg(feature = "dyn")]
 pub trait DynInPlaceInit<T: ?Sized>: Sized {
     ///
-    fn dyn_init<E, Args>(init: crate::DynInit<T, Args, E>, args: Args) -> Result<Self, E>
+    fn dyn_init<E, Args>(init: crate::DynInit<T, Args, E>) -> Result<Self, E>
     where
         E: From<AllocError>;
 }
@@ -165,7 +165,7 @@ impl<T> InPlaceWrite<T> for Box<MaybeUninit<T>> {
 }
 
 impl<T: ?Sized> DynInPlaceInit<T> for Box<T> {
-    fn dyn_init<E, Args>(init: crate::DynInit<T, Args, E>, args: Args) -> Result<Self, E>
+    fn dyn_init<E, Args>(init: crate::DynInit<T, Args, E>) -> Result<Self, E>
     where
         E: From<AllocError>,
     {
@@ -174,7 +174,7 @@ impl<T: ?Sized> DynInPlaceInit<T> for Box<T> {
 
         let ptr = Global.allocate(layout)?.as_ptr().cast();
 
-        let meta = unsafe { init.init(ptr, args)? };
+        let meta = unsafe { init.init(ptr)? };
 
         unsafe { Ok(Box::from_raw_in(ptr::from_raw_parts_mut(ptr, meta), Global)) }
     }
