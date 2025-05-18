@@ -19,7 +19,6 @@ pub fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream> {
         0,
         parse_quote!(#[doc = ::core::concat!("Dynamic version of `", #name, "`.")]),
     );
-    fun.sig.ident = format_ident!("dyn_{}", fun.sig.ident);
     let OutputSet {
         raw_recv,
         real_recv,
@@ -30,20 +29,12 @@ pub fn expand(args: TokenStream, item: TokenStream) -> Result<TokenStream> {
         set_body(
             default,
             (raw_recv, real_recv),
-            fun.sig
-                .inputs
-                .iter()
-                .filter_map(|r| match r {
-                    FnArg::Receiver(_) => None,
-                    FnArg::Typed(arg) => Some(arg),
-                })
-                .cloned()
-                .collect(),
             &mut fun.sig,
             dyn_,
             recv_span,
         );
     }
+    fun.sig.ident = format_ident!("dyn_{}", fun.sig.ident);
     Ok(quote! {
         #normal
         #fun
@@ -133,38 +124,10 @@ fn is_self_ty(ty: &Type) -> bool {
 fn set_body(
     body: &mut Block,
     (raw, real): (Type, Type),
-    args: Vec<PatType>,
     sig: &mut Signature,
     dyn_: Type,
     recv_span: Span,
 ) {
-    let arg_pats = args.iter().map(|arg| &arg.pat);
-    let arg_types = args.iter().map(|arg| &arg.ty);
-    let mut this = format_ident!("this");
-    this.set_span(recv_span);
-    let mut stmts = mem::take(&mut body.stmts);
-    for s in &mut stmts {
-        SelfReplacer(this.clone()).visit_stmt_mut(s);
-    }
-    body.stmts.push(parse_quote! {
-        unsafe fn __raw_init(
-            slot: *mut (),
-            (#this, #(#arg_pats),*): (#raw, #(#arg_types),*),
-        ) -> <#dyn_ as ::core::ptr::Pointee>::Metadata {
-            let value = move || {
-                let #this = unsafe { &*(#this as *const Baz) };
-                #(#stmts)*
-            }();
-            let slot = slot.cast();
-            unsafe { slot.write(value) };
-            let r = unsafe { &*slot };
-            let r = r as &#dyn_;
-            Ok(::core::ptr::metadata(r))
-        }
-    });
-    body.stmts.push(parse_quote! {
-        let this: *const Self = self;
-    });
     let args = sig
         .inputs
         .iter_mut()
@@ -183,10 +146,54 @@ fn set_body(
                 subpat: None,
             }));
             ident
-        });
+        })
+        .collect::<Vec<_>>();
+    let arg_types = sig
+        .inputs
+        .iter()
+        .filter_map(|r| match r {
+            FnArg::Receiver(_) => None,
+            FnArg::Typed(arg) => Some(arg),
+        })
+        .map(|arg| &arg.ty);
+    let name = &sig.ident;
+    let mut this = format_ident!("this");
+    this.set_span(recv_span);
+    body.stmts.clear();
+    body.stmts.push(parse_quote! {
+        let __raw_init = |
+            slot: *mut (),
+            (#this, #(#args),*): (#raw, #(#arg_types),*),
+        | -> ::pin_init::InitOk<#dyn_> {
+            let #this = unsafe { &*(#this as *const Baz) };
+            let mut ptr = ::core::ptr::null_mut();
+            let value = Self::#name(#this, #(#args),*);
+            if false {
+                unsafe { *ptr = value };
+                ::core::unreachable!()
+            } else {
+                ptr = slot.cast();
+                unsafe { ptr.write(value) };
+                let r = unsafe { &*ptr };
+                let r = r as &#dyn_;
+                ::pin_init::InitOk::from_metadata(::core::ptr::metadata(r))
+            }
+        };
+    });
+    body.stmts.push(parse_quote!(let this: *const Self = self;));
+    body.stmts.push(parse_quote!(let layout = {
+        let mut ptr = ::core::ptr::null_mut();
+        if false {
+            unsafe { *ptr = Self::#name(self, #(#args),*) };
+        }
+        fn layout_for<T>(_: *mut T) -> ::core::alloc::Layout {
+            ::core::alloc::Layout::new::<T>()
+        }
+        layout_for(ptr)
+    };));
     body.stmts.push(Stmt::Expr(
         parse_quote!(unsafe {
-            ::pin_init::DynInit::new(__raw_init, (this.cast::<()>(), #(#args),*, layout))
+            ::pin_init::DynInit::new(__raw_init, (this.cast::<()>(), #(#args),*), layout)
         }),
         None,
     ));

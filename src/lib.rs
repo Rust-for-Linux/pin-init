@@ -997,6 +997,15 @@ impl<T: ?Sized> InitOk<T> {
             _phantom: PhantomData,
         }
     }
+
+    ///
+    #[cfg(feature = "dyn")]
+    pub fn from_metadata(meta: <T as ptr::Pointee>::Metadata) -> Self {
+        Self {
+            meta,
+            _phantom: PhantomData,
+        }
+    }
 }
 
 /// A pin-initializer for the type `T`.
