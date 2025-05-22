@@ -13,7 +13,7 @@ fn main() {
             ::core::convert::Infallible,
         >(
             data,
-            move |slot| {
+            |slot| {
                 {
                     struct __InitOk;
                     #[allow(unreachable_code, clippy::diverging_sub_expression)]

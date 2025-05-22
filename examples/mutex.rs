@@ -76,7 +76,7 @@ pub struct CMutex<T> {
 impl<T> CMutex<T> {
     #[inline]
     pub fn new(val: impl PinInit<T>) -> impl PinInit<Self> {
-        pin_init!(CMutex {
+        pin_init!(move CMutex {
             wait_list <- ListHead::new(),
             spin_lock: SpinLock::new(),
             locked: Cell::new(false),
@@ -174,7 +174,7 @@ impl WaitEntry {
     fn insert_new(list: &ListHead) -> impl PinInit<Self> + '_ {
         #[cfg(feature = "std")]
         {
-            pin_init!(Self {
+            pin_init!(move Self {
                 thread: thread::current(),
                 wait_list <- ListHead::insert_prev(list),
             })

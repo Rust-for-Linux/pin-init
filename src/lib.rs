@@ -83,7 +83,7 @@
 //!     b: u32,
 //! }
 //!
-//! let foo = pin_init!(Foo {
+//! let foo = pin_init!(move Foo {
 //!     a <- CMutex::new(42),
 //!     b: 24,
 //! });
@@ -107,7 +107,7 @@
 //! #     b: u32,
 //! # }
 //! #
-//! # let foo = pin_init!(Foo {
+//! # let foo = pin_init!(move Foo {
 //! #     a <- CMutex::new(42),
 //! #     b: 24,
 //! # });
@@ -146,7 +146,7 @@
 //!
 //! impl DriverData {
 //!     fn new() -> impl PinInit<Self, Error> {
-//!         try_pin_init!(Self {
+//!         try_pin_init!(move Self {
 //!             status <- CMutex::new(0),
 //!             buffer: Box::init(pin_init::zeroed())?,
 //!         }? Error)
@@ -480,7 +480,7 @@ pub use ::pin_init_internal::MaybeZeroable;
 ///     x: u32,
 /// }
 ///
-/// stack_pin_init!(let foo = pin_init!(Foo {
+/// stack_pin_init!(let foo = pin_init!(move Foo {
 ///     a <- CMutex::new(42),
 ///     b: Bar {
 ///         x: 64,
@@ -531,7 +531,7 @@ macro_rules! stack_pin_init {
 ///     x: u32,
 /// }
 ///
-/// stack_try_pin_init!(let foo: Foo = try_pin_init!(Foo {
+/// stack_try_pin_init!(let foo: Foo = try_pin_init!(move Foo {
 ///     a <- CMutex::new(42),
 ///     b: Box::try_new(Bar {
 ///         x: 64,
@@ -558,7 +558,7 @@ macro_rules! stack_pin_init {
 ///     x: u32,
 /// }
 ///
-/// stack_try_pin_init!(let foo: Foo =? try_pin_init!(Foo {
+/// stack_try_pin_init!(let foo: Foo =? try_pin_init!(move Foo {
 ///     a <- CMutex::new(42),
 ///     b: Box::try_new(Bar {
 ///         x: 64,
@@ -611,7 +611,7 @@ macro_rules! stack_try_pin_init {
 /// # fn demo() -> impl PinInit<Foo> {
 /// let a = 42;
 ///
-/// let initializer = pin_init!(Foo {
+/// let initializer = pin_init!(move Foo {
 ///     a,
 ///     b: Bar {
 ///         x: 64,
@@ -725,7 +725,7 @@ macro_rules! stack_try_pin_init {
 ///
 /// impl FooContainer {
 ///     fn new(other: u32) -> impl PinInit<Self> {
-///         pin_init!(Self {
+///         pin_init!(move Self {
 ///             foo1 <- Foo::new(),
 ///             foo2 <- Foo::new(),
 ///             other,
@@ -1532,7 +1532,7 @@ impl_tuple_zeroable!(A, B, C, D, E, F, G, H, I, J);
 /// };
 ///
 /// let foo_initializer = pin_init!(Foo{});
-/// let initializer = pin_init!(Bar {
+/// let initializer = pin_init!(move Bar {
 ///     content <- UnsafeCell::pin_init(foo_initializer)
 /// });
 /// ```

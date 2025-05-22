@@ -12,6 +12,7 @@ use syn::{
 };
 
 pub(crate) struct InPlaceInitializer {
+    move_: Option<Token![move]>,
     this: Option<This>,
     path: Path,
     brace_token: token::Brace,
@@ -53,6 +54,7 @@ enum InitKind {
 
 pub(crate) fn init(
     InPlaceInitializer {
+        move_,
         this,
         path,
         fields,
@@ -136,7 +138,7 @@ pub(crate) fn init(
         // Ensure that `#data` really is of type `#data` and help with type inference:
         let init = ::pin_init::__internal::#data_trait::make_closure::<_, __InitOk, #error>(
             #data,
-            move |slot| {
+            #move_ |slot| {
                 {
                     // Shadow the structure so it cannot be used to return early.
                     struct __InitOk;
@@ -333,6 +335,7 @@ impl Parse for InPlaceInitializer {
     fn parse(input: ParseStream) -> Result<Self> {
         let content;
         Ok(Self {
+            move_: input.parse()?,
             this: input.peek(Token![&]).then(|| input.parse()).transpose()?,
             path: input.parse()?,
             brace_token: braced!(content in input),

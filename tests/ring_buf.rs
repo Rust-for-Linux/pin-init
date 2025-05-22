@@ -46,7 +46,7 @@ impl<T, const SIZE: usize> PinnedDrop for RingBuffer<T, SIZE> {
 impl<T, const SIZE: usize> RingBuffer<T, SIZE> {
     pub fn new() -> impl PinInit<Self> {
         assert!(SIZE > 0);
-        pin_init!(&this in Self {
+        pin_init!(move &this in Self {
             // SAFETY: The elements of the array can be uninitialized.
             buffer <- unsafe { init_from_closure(|_| Ok::<_, Infallible>(())) },
             // SAFETY: `this` is a valid pointer.
@@ -165,7 +165,7 @@ pub struct EvenU64 {
 
 impl EvenU64 {
     pub fn new2(value: u64) -> impl Init<Self, Error> {
-        try_init!(Self {
+        try_init!(move Self {
             info: "Hello world!".to_owned(),
             data: if value % 2 == 0 {
                 value
@@ -175,7 +175,7 @@ impl EvenU64 {
         }? Error)
     }
     pub fn new(value: u64) -> impl Init<Self, ()> {
-        try_init!(Self {
+        try_init!(move Self {
             info: "Hello world!".to_owned(),
             data: if value % 2 == 0 {
                 value
