@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - added support for visibility in `Zeroable` derive macro
 - added support for `union`s in `Zeroable` derive macro
 - renamed the crate from `pinned-init` to `pin-init` and `pinned-init-macro` to `pin-init-internal`
+- renamed `zeroed()` to `init_zeroed()`
 
 ### Fixed
 

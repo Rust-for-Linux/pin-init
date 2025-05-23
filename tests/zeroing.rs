@@ -24,7 +24,7 @@ impl Foo {
                 // SAFETY: project from the NonNull<Foo> to the buf field
                 let ptr = unsafe { addr_of_mut!((*ptr).buf) }.cast::<u8>();
                 [ptr; MARKS]},
-            ..Zeroable::zeroed()
+            ..Zeroable::init_zeroed()
         })
     }
 }
