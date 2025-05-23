@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+#![feature(raw_ref_op)]
+
 use pin_init::*;
 
 // Struct with size over 1GiB

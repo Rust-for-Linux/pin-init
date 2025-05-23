@@ -1,6 +1,7 @@
+#![feature(raw_ref_op)]
 #![cfg_attr(not(RUSTC_LINT_REASONS_IS_STABLE), feature(lint_reasons))]
 
-use core::{marker::PhantomPinned, ptr::addr_of_mut};
+use std::marker::PhantomPinned;
 
 use pin_init::*;
 
@@ -22,7 +23,7 @@ impl Foo {
             marks: {
                 let ptr = this.as_ptr();
                 // SAFETY: project from the NonNull<Foo> to the buf field
-                let ptr = unsafe { addr_of_mut!((*ptr).buf) }.cast::<u8>();
+                let ptr = unsafe { &raw mut (*ptr).buf }.cast::<u8>();
                 [ptr; MARKS]},
             ..Zeroable::zeroed()
         })

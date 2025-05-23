@@ -4,13 +4,7 @@
 
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
 use alloc::sync::Arc;
-use core::{
-    convert::Infallible,
-    marker::PhantomPinned,
-    mem::MaybeUninit,
-    pin::Pin,
-    ptr::{self, addr_of_mut},
-};
+use core::{convert::Infallible, marker::PhantomPinned, mem::MaybeUninit, pin::Pin, ptr};
 use pin_init::*;
 #[cfg(feature = "std")]
 use std::sync::Arc;
@@ -50,8 +44,8 @@ impl<T, const SIZE: usize> RingBuffer<T, SIZE> {
             // SAFETY: The elements of the array can be uninitialized.
             buffer <- unsafe { init_from_closure(|_| Ok::<_, Infallible>(())) },
             // SAFETY: `this` is a valid pointer.
-            head: unsafe { addr_of_mut!((*this.as_ptr()).buffer).cast::<T>() },
-            tail: unsafe { addr_of_mut!((*this.as_ptr()).buffer).cast::<T>() },
+            head: unsafe { (&raw mut (*this.as_ptr()).buffer).cast::<T>() },
+            tail: unsafe { (&raw mut (*this.as_ptr()).buffer).cast::<T>() },
             _pin: PhantomPinned,
         })
     }
@@ -112,7 +106,7 @@ impl<T, const SIZE: usize> RingBuffer<T, SIZE> {
     unsafe fn advance(&mut self, ptr: *mut T) -> *mut T {
         // SAFETY: ptr's offset from buffer is < SIZE
         let ptr = unsafe { ptr.add(1) };
-        let origin: *mut _ = addr_of_mut!(self.buffer);
+        let origin: *mut _ = &raw mut (self.buffer);
         let origin = origin.cast::<T>();
         let offset = unsafe { ptr.offset_from(origin) };
         if offset >= SIZE as isize {
