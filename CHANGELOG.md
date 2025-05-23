@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MaybeZeroable` derive macro to try to derive `Zeroable`, but not error if not all fields
   implement it.
 - `unsafe fn cast_[pin_]init()` functions to unsafely change the initialized type of an initializer
+- add `Zeroable::init_zeroed()` delegating to `init_zeroed()`
 
 ### Changed
 
