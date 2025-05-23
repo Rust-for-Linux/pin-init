@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   implement it.
 - `unsafe fn cast_[pin_]init()` functions to unsafely change the initialized type of an initializer
 - add `Zeroable::init_zeroed()` delegating to `init_zeroed()`
+- add new `zeroed()`, a safe version of `mem::zeroed()` and also provide it via `Zeroable::zeroed()`
 
 ### Changed
 
