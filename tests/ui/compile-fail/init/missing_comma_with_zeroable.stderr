@@ -1,20 +1,9 @@
-error[E0782]: expected a type, found a trait
-  --> tests/ui/compile-fail/init/missing_comma_with_zeroable.rs:12:15
-   |
-12 |         a: 0..Zeroable::zeroed()
-   |               ^^^^^^^^
-   |
-help: you can add the `dyn` keyword if you want a trait object
-   |
-12 |         a: 0..<dyn Zeroable>::zeroed()
-   |               ++++         +
-
 error[E0308]: mismatched types
   --> tests/ui/compile-fail/init/missing_comma_with_zeroable.rs:11:13
    |
 11 |       let _ = init!(Foo {
    |  _____________^
-12 | |         a: 0..Zeroable::zeroed()
+12 | |         a: 0..Zeroable::init_zeroed()
 13 | |     });
    | |      ^
    | |      |

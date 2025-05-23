@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MaybeZeroable` derive macro to try to derive `Zeroable`, but not error if not all fields
   implement it.
 - `unsafe fn cast_[pin_]init()` functions to unsafely change the initialized type of an initializer
+- add `Zeroable::init_zeroed()` delegating to `init_zeroed()`
+- add new `zeroed()`, a safe version of `mem::zeroed()` and also provide it via `Zeroable::zeroed()`
+- implement `Zeroable` for `Option<&T>` and `Option<&mut T>`
+- implement `Zeroable` for `Option<[unsafe] [extern "abi"] fn(...args...) -> ret>` for `"Rust"` and
+  `"C"` ABIs and up to 20 arguments
 
 ### Changed
 
@@ -20,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - added support for visibility in `Zeroable` derive macro
 - added support for `union`s in `Zeroable` derive macro
 - renamed the crate from `pinned-init` to `pin-init` and `pinned-init-macro` to `pin-init-internal`
+- renamed `zeroed()` to `init_zeroed()`
 
 ### Fixed
 

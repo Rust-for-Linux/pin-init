@@ -17,12 +17,12 @@ fn too_big_in_place() {
 
     // should be too big with current hardware.
     assert!(matches!(
-        Box::init(zeroed::<[u8; 1024 * 1024 * 1024 * 1024]>()),
+        Box::init(init_zeroed::<[u8; 1024 * 1024 * 1024 * 1024]>()),
         Err(AllocError)
     ));
     // should be too big with current hardware.
     assert!(matches!(
-        Arc::init(zeroed::<[u8; 1024 * 1024 * 1024 * 1024]>()),
+        Arc::init(init_zeroed::<[u8; 1024 * 1024 * 1024 * 1024]>()),
         Err(AllocError)
     ));
 }
