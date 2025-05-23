@@ -9,6 +9,6 @@ struct Foo {
 
 fn main() {
     let _ = init!(Foo {
-        a: 0..Zeroable::zeroed()
+        a: 0..Zeroable::init_zeroed()
     });
 }
