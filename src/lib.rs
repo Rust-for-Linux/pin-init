@@ -1528,6 +1528,9 @@ unsafe impl<T> ZeroableOption for &T {}
 // SAFETY: `Option<&mut T>` is part of the option layout optimization guarantee:
 // <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
 unsafe impl<T> ZeroableOption for &mut T {}
+// SAFETY: `Option<NonNull<T>>` is part of the option layout optimization guarantee:
+// <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
+unsafe impl<T> ZeroableOption for NonNull<T> {}
 
 /// Create an initializer for a zeroed `T`.
 ///
@@ -1606,7 +1609,6 @@ impl_zeroable! {
     Option<NonZeroU128>, Option<NonZeroUsize>,
     Option<NonZeroI8>, Option<NonZeroI16>, Option<NonZeroI32>, Option<NonZeroI64>,
     Option<NonZeroI128>, Option<NonZeroIsize>,
-    {<T>} Option<NonNull<T>>,
 
     // SAFETY: `null` pointer is valid.
     //
