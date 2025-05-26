@@ -1,15 +1,10 @@
 #![cfg_attr(feature = "alloc", feature(allocator_api))]
 #![cfg_attr(not(RUSTC_LINT_REASONS_IS_STABLE), feature(lint_reasons))]
 
-#[cfg(all(
-    feature = "alloc",
-    not(miri),
-    not(NO_ALLOC_FAIL_TESTS),
-    not(target_os = "macos")
-))]
 #[test]
+#[cfg(feature = "alloc")]
+#[cfg_attr(any(miri, NO_ALLOC_FAIL_TESTS, target_os = "macos"), ignore)]
 fn too_big_in_place() {
-    #[cfg(feature = "alloc")]
     use core::alloc::AllocError;
 
     use pin_init::*;

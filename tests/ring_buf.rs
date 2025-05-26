@@ -200,8 +200,8 @@ fn even_stack() {
     assert_eq!(val, Err(()));
 }
 
-#[cfg(any(feature = "std", feature = "alloc"))]
 #[test]
+#[cfg(any(feature = "std", feature = "alloc"))]
 fn even_failing() {
     assert!(matches!(Box::try_pin_init(EvenU64::new2(3)), Err(Error)));
     assert!(matches!(Box::try_init(EvenU64::new2(3)), Err(Error)));
@@ -253,8 +253,9 @@ struct BigStruct {
     oth: MaybeUninit<u8>,
 }
 
-#[cfg(all(any(feature = "std", feature = "alloc"), not(miri)))]
 #[test]
+#[cfg(any(feature = "std", feature = "alloc"))]
+#[cfg_attr(miri, ignore)]
 fn big_struct() {
     let x = Arc::init(init!(BigStruct {
         buf <- zeroed(),
@@ -268,8 +269,9 @@ fn big_struct() {
     println!("{x:?}");
 }
 
-#[cfg(all(any(feature = "std", feature = "alloc"), not(miri)))]
 #[test]
+#[cfg(any(feature = "std", feature = "alloc"))]
+#[cfg_attr(miri, ignore)]
 fn with_big_struct() {
     #[allow(unused_attributes)]
     #[path = "../examples/mutex.rs"]
@@ -299,13 +301,9 @@ fn with_big_struct() {
     }
 }
 
-#[cfg(all(
-    feature = "alloc",
-    not(miri),
-    not(NO_ALLOC_FAIL_TESTS),
-    not(target_os = "macos")
-))]
 #[test]
+#[cfg(feature = "alloc")]
+#[cfg_attr(any(miri, NO_ALLOC_FAIL_TESTS, target_os = "macos"), ignore)]
 fn too_big_pinned() {
     use core::alloc::AllocError;
 
