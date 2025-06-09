@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - implement `Zeroable` for `Option<&T>` and `Option<&mut T>`
 - implement `Zeroable` for `Option<[unsafe] [extern "abi"] fn(...args...) -> ret>` for `"Rust"` and
   `"C"` ABIs and up to 20 arguments
+- `impl<T, E> [Pin]Init<T, E> for Result<T, E>`, so results are now (pin-)initializers
 
 ### Changed
 
@@ -26,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - added support for `union`s in `Zeroable` derive macro
 - renamed the crate from `pinned-init` to `pin-init` and `pinned-init-macro` to `pin-init-internal`
 - renamed `zeroed()` to `init_zeroed()`
+- blanket impls of `Init` and `PinInit` from `impl<T, E> [Pin]Init<T, E> for T` to
+  `impl<T> [Pin]Init<T> for T`
 
 ### Fixed
 
