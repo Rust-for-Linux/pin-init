@@ -46,6 +46,10 @@ const _: () = {
     where
         T: Bar<'a, 1>,
     {
+        /// # Safety
+        ///
+        /// The caller must ensure that `slot` is a valid pointer to uninitialized memory
+        /// that is properly aligned and large enough to hold a value of type `$p_type`.
         unsafe fn _pin<E>(
             self,
             slot: *mut PhantomPinned,
@@ -53,6 +57,11 @@ const _: () = {
         ) -> ::core::result::Result<(), E> {
             unsafe { ::pin_init::PinInit::__pinned_init(init, slot) }
         }
+        /// # Safety
+        ///
+        /// The caller must ensure that `slot` is a valid pointer to uninitialized memory
+        /// that is properly aligned and large enough to hold a value of type `$type`.
+        /// The memory at `slot` must also be valid for writes.
         unsafe fn array<E>(
             self,
             slot: *mut [u8; 1024 * 1024],
@@ -60,6 +69,11 @@ const _: () = {
         ) -> ::core::result::Result<(), E> {
             unsafe { ::pin_init::Init::__init(init, slot) }
         }
+        /// # Safety
+        ///
+        /// The caller must ensure that `slot` is a valid pointer to uninitialized memory
+        /// that is properly aligned and large enough to hold a value of type `$type`.
+        /// The memory at `slot` must also be valid for writes.
         unsafe fn r<E>(
             self,
             slot: *mut &'b mut [&'a mut T; SIZE],

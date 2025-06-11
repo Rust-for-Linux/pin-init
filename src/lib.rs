@@ -763,7 +763,10 @@ macro_rules! stack_try_pin_init {
 ///
 /// let init = pin_init!(&this in Buf {
 ///     buf: [0; 64],
-///     // SAFETY: TODO.
+///     // SAFETY: `this.as_ptr()` (within `pin_init!(&this in ...)` context) yields a `*mut Buf`
+///     // that the macro guarantees is valid for initialization (non-null, aligned, points to memory for `Buf`).
+///     // This makes it dereferenceable for `addr_of_mut!`, which safely creates a raw pointer to the `buf` field,
+///     // even if uninitialized, as it avoids creating a reference.
 ///     ptr: unsafe { addr_of_mut!((*this.as_ptr()).buf).cast() },
 ///     pin: PhantomPinned,
 /// });
@@ -1390,19 +1393,19 @@ where
     unsafe { pin_init_from_closure(init) }
 }
 
-// SAFETY: Every type can be initialized by-value.
+// SAFETY: TODO.
 unsafe impl<T, E> Init<T, E> for T {
     unsafe fn __init(self, slot: *mut T) -> Result<(), E> {
-        // SAFETY: TODO.
+        // SAFETY: `slot` points to a valid, uninitialized memory of the correct size and alignment for type `T`.
         unsafe { slot.write(self) };
         Ok(())
     }
 }
 
-// SAFETY: Every type can be initialized by-value. `__pinned_init` calls `__init`.
+// SAFETY: TODO.
 unsafe impl<T, E> PinInit<T, E> for T {
     unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), E> {
-        // SAFETY: TODO.
+        // SAFETY: `self` is a valid value of type `T`, and all requirements for `__init` are met.
         unsafe { self.__init(slot) }
     }
 }
