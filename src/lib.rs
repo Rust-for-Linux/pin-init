@@ -1393,7 +1393,6 @@ where
     unsafe { pin_init_from_closure(init) }
 }
 
-// SAFETY: TODO.
 unsafe impl<T, E> Init<T, E> for T {
     unsafe fn __init(self, slot: *mut T) -> Result<(), E> {
         // SAFETY: `slot` points to a valid, uninitialized memory of the correct size and alignment for type `T`.
@@ -1402,7 +1401,6 @@ unsafe impl<T, E> Init<T, E> for T {
     }
 }
 
-// SAFETY: TODO.
 unsafe impl<T, E> PinInit<T, E> for T {
     unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), E> {
         // SAFETY: `self` is a valid value of type `T`, and all requirements for `__init` are met.
