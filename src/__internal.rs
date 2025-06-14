@@ -51,10 +51,11 @@ where
 ///
 /// # Safety
 ///
-/// Implementers (typically the `#[pin_data]` macro) must ensure that this method
-/// returns a `PinData` instance that accurately reflects the structural pinning
-/// and field layout of `Self`. Incorrect metadata can lead to undefined behavior
-/// when used by the `pin-init` macros.
+/// This `unsafe trait` should only be implemented by the `#[pin_data]` macro. The implementer must ensure:
+/// - `Self::PinData` is the correct metadata type for `Self` and implements `PinData<Datee = Self>`
+/// - `__pin_data()` returns a valid instance that accurately reflects the structural pinning and field layout of `Self`
+/// - The metadata provides sound field accessors that uphold their safety contracts
+/// - Incorrect metadata can lead to undefined behavior when used by the pin-init system
 pub unsafe trait HasPinData {
     type PinData: PinData;
 
@@ -66,12 +67,12 @@ pub unsafe trait HasPinData {
 ///
 /// # Safety
 ///
-/// This `unsafe trait` is implemented by the `#[pin_data]` macro for its generated metadata
-/// struct (e.g., `__ThePinData`). The macro MUST ensure `Self` is `Copy`.
-/// It must also ensure `Self::Datee` is the correct struct type implementing
-/// `HasPinData<PinData = Self>`. Moreover, the macro must generate sound field accessors
-/// on `Self` that uphold their safety contracts and correctly use `$crate::PinInit::__pinned_init`
-/// or `$crate::Init::__init`. For internal `pin-init` use only.
+/// This `unsafe trait` should only be implemented by the `#[pin_data]` macro for its generated
+/// metadata struct. The implementer must ensure:
+/// - `Self` is `Copy`
+/// - `Self::Datee` is the correct struct type implementing `HasPinData<PinData = Self>`
+/// - Generated field accessors uphold their safety contracts and correctly use the appropriate
+///   initialization methods
 pub unsafe trait PinData: Copy {
     type Datee: ?Sized + HasPinData;
 
@@ -89,10 +90,10 @@ pub unsafe trait PinData: Copy {
 ///
 /// # Safety
 ///
-/// Implementers (typically the `#[pin_data]` macro) must ensure that this method
-/// returns a `PinData` instance that accurately reflects the structural pinning
-/// and field layout of `Self`. Incorrect metadata can lead to undefined behavior
-/// when used by the `pin-init` macros.
+/// This `unsafe trait` should only be implemented by the `pin-init` macro system. The implementer must ensure:
+/// - `Self::InitData` accurately represents the initialization structure of `Self`
+/// - `__init_data()` returns a valid metadata instance for this type
+/// - The metadata correctly reflects the field layout and initialization requirements
 pub unsafe trait HasInitData {
     type InitData: InitData;
 
@@ -103,10 +104,10 @@ pub unsafe trait HasInitData {
 ///
 /// # Safety
 ///
-/// This `unsafe trait` is a component of the `pin-init` macro system.
-/// Implementers must ensure `Self` is `Copy`, and`Self::Datee` correctly corresponds to the type
-/// `Self` represents for initialization purposes. This trait is primarily intended for internal use
-/// by the `pin-init` crate.
+/// This `unsafe trait` should only be implemented by the `pin-init` macro system. The implementer must ensure:
+/// - `Self` is `Copy`
+/// - `Self::Datee` correctly corresponds to the type `Self` represents for initialization purposes
+/// - The trait is used consistently within the pin-init system
 pub unsafe trait InitData: Copy {
     type Datee: ?Sized + HasInitData;
 
