@@ -59,7 +59,9 @@ where
 pub unsafe trait HasPinData {
     type PinData: PinData;
 
-    #[expect(clippy::missing_safety_doc)]
+    /// # Safety
+    ///
+    /// This method should only be called by macros in the pin-init crate.
     unsafe fn __pin_data() -> Self::PinData;
 }
 
@@ -97,6 +99,9 @@ pub unsafe trait PinData: Copy {
 pub unsafe trait HasInitData {
     type InitData: InitData;
 
+    /// # Safety
+    ///
+    /// This method should only be called by macros in the pin-init crate.
     unsafe fn __init_data() -> Self::InitData;
 }
 

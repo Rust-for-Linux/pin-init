@@ -1013,6 +1013,7 @@ macro_rules! __pin_data {
                 ///
                 /// The caller must ensure that `slot` is a valid pointer to uninitialized memory
                 /// that is properly aligned and large enough to hold a value of type `$p_type`.
+                /// `slot` is a pointer valid for writes and any value written to it is pinned.
                 $pvis unsafe fn $p_field<E>(
                     self,
                     slot: *mut $p_type,
@@ -1029,6 +1030,7 @@ macro_rules! __pin_data {
                 /// The caller must ensure that `slot` is a valid pointer to uninitialized memory
                 /// that is properly aligned and large enough to hold a value of type `$type`.
                 /// The memory at `slot` must also be valid for writes.
+                /// `slot` is valid for writes.
                 $fvis unsafe fn $field<E>(
                     self,
                     slot: *mut $type,
@@ -1151,10 +1153,9 @@ macro_rules! __init_internal {
         // Get the data about fields from the supplied type.
         //
         // SAFETY: The `$get_data()` call (which resolves to either `HasPinData::__pin_data()`
-        // or `HasInitData::__init_data()`) is safe because the `#[pin_data]` macro, when applied
-        // to type `$t`, correctly implements the respective trait. This ensures that the returned
-        // metadata accurately reflects `$t`'s structure and pinning properties, fulfilling the
-        // `# Safety` contract of the called `__pin_data()` or `__init_data()` method.
+        // or `HasInitData::__init_data()`) is safe because this macro is part of the pin-init
+        // crate, satisfying the safety requirement that these methods should only be called by
+        // macros in the pin-init crate (as documented in their respective `# Safety` sections).
         // The `paste!` macro is used for re-tokenization and does not affect this safety argument.
         let data = unsafe {
             use $crate::__internal::$has_data;
