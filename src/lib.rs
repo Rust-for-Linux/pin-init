@@ -1592,7 +1592,7 @@ pub fn init_zeroed<T: Zeroable>() -> impl Init<T> {
 /// assert_eq!(point.y, 0);
 /// ```
 pub const fn zeroed<T: Zeroable>() -> T {
-    // SAFETY:By the type invariants of `Zeroable`, all zeroes is a valid bit pattern for `T`.
+    // SAFETY: By the type invariants of `Zeroable`, all zeroes is a valid bit pattern for `T`.
     unsafe { core::mem::zeroed() }
 }
 
