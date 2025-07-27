@@ -1,4 +1,4 @@
-use pin_init::{init, InPlaceInit, Init};
+use pinned_init::{init, InPlaceInit, Init};
 
 #[derive(Debug)]
 struct Foo {

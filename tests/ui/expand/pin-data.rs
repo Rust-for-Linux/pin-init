@@ -1,5 +1,5 @@
 use core::marker::PhantomPinned;
-use pin_init::*;
+use pinned_init::*;
 
 #[pin_data]
 struct Foo {

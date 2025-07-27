@@ -12,7 +12,7 @@ use core::{
     pin::Pin,
     time::Duration,
 };
-use pin_init::*;
+use pinned_init::*;
 #[cfg(feature = "std")]
 use std::{
     sync::Arc,

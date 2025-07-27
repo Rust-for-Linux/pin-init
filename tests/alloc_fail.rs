@@ -7,7 +7,7 @@
 fn too_big_in_place() {
     use core::alloc::AllocError;
 
-    use pin_init::*;
+    use pinned_init::*;
     use std::sync::Arc;
 
     // should be too big with current hardware.

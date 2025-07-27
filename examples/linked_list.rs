@@ -12,7 +12,7 @@ use core::{
     ptr::{self, NonNull},
 };
 
-use pin_init::*;
+use pinned_init::*;
 
 #[allow(unused_attributes)]
 mod error;

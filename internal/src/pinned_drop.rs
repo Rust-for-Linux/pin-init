@@ -37,11 +37,11 @@ pub(crate) fn pinned_drop(_args: TokenStream, input: TokenStream) -> TokenStream
     let idx = pinned_drop_idx
         .unwrap_or_else(|| panic!("Expected an `impl` block implementing `PinnedDrop`."));
     // Fully qualify the `PinnedDrop`, as to avoid any tampering.
-    toks.splice(idx..idx, quote!(::pin_init::));
+    toks.splice(idx..idx, quote!(::pinned_init::));
     // Take the `{}` body and call the declarative macro.
     if let Some(TokenTree::Group(last)) = toks.pop() {
         let last = last.stream();
-        quote!(::pin_init::__pinned_drop! {
+        quote!(::pinned_init::__pinned_drop! {
             @impl_sig(#(#toks)*),
             @impl_body(#last),
         })

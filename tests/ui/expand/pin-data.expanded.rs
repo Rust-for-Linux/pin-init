@@ -1,5 +1,5 @@
 use core::marker::PhantomPinned;
-use pin_init::*;
+use pinned_init::*;
 struct Foo {
     array: [u8; 1024 * 1024],
     _pin: PhantomPinned,
@@ -20,19 +20,19 @@ const _: () = {
         unsafe fn _pin<E>(
             self,
             slot: *mut PhantomPinned,
-            init: impl ::pin_init::PinInit<PhantomPinned, E>,
+            init: impl ::pinned_init::PinInit<PhantomPinned, E>,
         ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::PinInit::__pinned_init(init, slot) }
+            unsafe { ::pinned_init::PinInit::__pinned_init(init, slot) }
         }
         unsafe fn array<E>(
             self,
             slot: *mut [u8; 1024 * 1024],
-            init: impl ::pin_init::Init<[u8; 1024 * 1024], E>,
+            init: impl ::pinned_init::Init<[u8; 1024 * 1024], E>,
         ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::Init::__init(init, slot) }
+            unsafe { ::pinned_init::Init::__init(init, slot) }
         }
     }
-    unsafe impl ::pin_init::__internal::HasPinData for Foo {
+    unsafe impl ::pinned_init::__internal::HasPinData for Foo {
         type PinData = __ThePinData;
         unsafe fn __pin_data() -> Self::PinData {
             __ThePinData {
@@ -40,7 +40,7 @@ const _: () = {
             }
         }
     }
-    unsafe impl ::pin_init::__internal::PinData for __ThePinData {
+    unsafe impl ::pinned_init::__internal::PinData for __ThePinData {
         type Datee = Foo;
     }
     #[allow(dead_code)]
@@ -60,7 +60,8 @@ const _: () = {
     impl MustNotImplDrop for Foo {}
     #[expect(non_camel_case_types)]
     trait UselessPinnedDropImpl_you_need_to_specify_PinnedDrop {}
-    impl<T: ::pin_init::PinnedDrop> UselessPinnedDropImpl_you_need_to_specify_PinnedDrop
-    for T {}
+    impl<
+        T: ::pinned_init::PinnedDrop,
+    > UselessPinnedDropImpl_you_need_to_specify_PinnedDrop for T {}
     impl UselessPinnedDropImpl_you_need_to_specify_PinnedDrop for Foo {}
 };

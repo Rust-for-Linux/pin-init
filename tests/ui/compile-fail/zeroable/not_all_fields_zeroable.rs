@@ -1,5 +1,5 @@
-extern crate pin_init;
-use pin_init::*;
+extern crate pinned_init;
+use pinned_init::*;
 
 #[derive(Zeroable)]
 struct Foo {

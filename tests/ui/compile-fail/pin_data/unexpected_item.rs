@@ -1,4 +1,4 @@
-use pin_init::*;
+use pinned_init::*;
 
 #[pin_data]
 fn foo() {}

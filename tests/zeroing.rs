@@ -2,7 +2,7 @@
 
 use core::{marker::PhantomPinned, ptr::addr_of_mut};
 
-use pin_init::*;
+use pinned_init::*;
 
 const MARKS: usize = 64;
 

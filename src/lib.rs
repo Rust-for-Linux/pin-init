@@ -74,7 +74,7 @@
 //! # #![feature(allocator_api)]
 //! # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
 //! # use core::pin::Pin;
-//! use pin_init::{pin_data, pin_init, InPlaceInit};
+//! use pinned_init::{pin_data, pin_init, InPlaceInit};
 //!
 //! #[pin_data]
 //! struct Foo {
@@ -98,7 +98,7 @@
 //! # #![feature(allocator_api)]
 //! # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
 //! # use core::{alloc::AllocError, pin::Pin};
-//! # use pin_init::*;
+//! # use pinned_init::*;
 //! #
 //! # #[pin_data]
 //! # struct Foo {
@@ -124,7 +124,7 @@
 //! ```rust
 //! # #![feature(allocator_api)]
 //! # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
-//! # use pin_init::*;
+//! # use pinned_init::*;
 //! # use std::sync::Arc;
 //! # use core::pin::Pin;
 //! let mtx: Result<Pin<Arc<CMutex<usize>>>, _> = Arc::pin_init(CMutex::new(42));
@@ -134,7 +134,7 @@
 //!
 //! ```rust
 //! # #![feature(allocator_api)]
-//! # use pin_init::*;
+//! # use pinned_init::*;
 //! # #[path = "../examples/error.rs"] mod error; use error::Error;
 //! # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
 //! #[pin_data]
@@ -148,7 +148,7 @@
 //!     fn new() -> impl PinInit<Self, Error> {
 //!         try_pin_init!(Self {
 //!             status <- CMutex::new(0),
-//!             buffer: Box::init(pin_init::init_zeroed())?,
+//!             buffer: Box::init(pinned_init::init_zeroed())?,
 //!         }? Error)
 //!     }
 //! }
@@ -170,7 +170,7 @@
 //!
 //! ```rust
 //! # #![feature(extern_types)]
-//! use pin_init::{pin_data, pinned_drop, PinInit, PinnedDrop, pin_init_from_closure};
+//! use pinned_init::{pin_data, pinned_drop, PinInit, PinnedDrop, pin_init_from_closure};
 //! use core::{
 //!     ptr::addr_of_mut,
 //!     marker::PhantomPinned,
@@ -319,7 +319,7 @@ pub use alloc::InPlaceInit;
 /// ```
 /// # #![feature(allocator_api)]
 /// # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
-/// use pin_init::pin_data;
+/// use pinned_init::pin_data;
 ///
 /// enum Command {
 ///     /* ... */
@@ -338,7 +338,7 @@ pub use alloc::InPlaceInit;
 /// # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
 /// # mod bindings { pub struct info; pub unsafe fn destroy_info(_: *mut info) {} }
 /// use core::pin::Pin;
-/// use pin_init::{pin_data, pinned_drop, PinnedDrop};
+/// use pinned_init::{pin_data, pinned_drop, PinnedDrop};
 ///
 /// enum Command {
 ///     /* ... */
@@ -359,7 +359,7 @@ pub use alloc::InPlaceInit;
 ///     }
 /// }
 /// ```
-pub use ::pin_init_internal::pin_data;
+pub use ::pinned_init_macro::pin_data;
 
 /// Used to implement `PinnedDrop` safely.
 ///
@@ -372,7 +372,7 @@ pub use ::pin_init_internal::pin_data;
 /// # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
 /// # mod bindings { pub struct info; pub unsafe fn destroy_info(_: *mut info) {} }
 /// use core::pin::Pin;
-/// use pin_init::{pin_data, pinned_drop, PinnedDrop};
+/// use pinned_init::{pin_data, pinned_drop, PinnedDrop};
 ///
 /// enum Command {
 ///     /* ... */
@@ -393,7 +393,7 @@ pub use ::pin_init_internal::pin_data;
 ///     }
 /// }
 /// ```
-pub use ::pin_init_internal::pinned_drop;
+pub use ::pinned_init_macro::pinned_drop;
 
 /// Derives the [`Zeroable`] trait for the given `struct` or `union`.
 ///
@@ -403,7 +403,7 @@ pub use ::pin_init_internal::pinned_drop;
 /// # Examples
 ///
 /// ```
-/// use pin_init::Zeroable;
+/// use pinned_init::Zeroable;
 ///
 /// #[derive(Zeroable)]
 /// pub struct DriverData {
@@ -414,7 +414,7 @@ pub use ::pin_init_internal::pinned_drop;
 /// ```
 ///
 /// ```
-/// use pin_init::Zeroable;
+/// use pinned_init::Zeroable;
 ///
 /// #[derive(Zeroable)]
 /// pub union SignCast {
@@ -422,7 +422,7 @@ pub use ::pin_init_internal::pinned_drop;
 ///     unsigned: u64,
 /// }
 /// ```
-pub use ::pin_init_internal::Zeroable;
+pub use ::pinned_init_macro::Zeroable;
 
 /// Derives the [`Zeroable`] trait for the given `struct` or `union` if all fields implement
 /// [`Zeroable`].
@@ -433,7 +433,7 @@ pub use ::pin_init_internal::Zeroable;
 /// # Examples
 ///
 /// ```
-/// use pin_init::MaybeZeroable;
+/// use pinned_init::MaybeZeroable;
 ///
 /// // implmements `Zeroable`
 /// #[derive(MaybeZeroable)]
@@ -453,7 +453,7 @@ pub use ::pin_init_internal::Zeroable;
 ///     other_data: &'static i32,
 /// }
 /// ```
-pub use ::pin_init_internal::MaybeZeroable;
+pub use ::pinned_init_macro::MaybeZeroable;
 
 /// Initialize and pin a type directly on the stack.
 ///
@@ -463,7 +463,7 @@ pub use ::pin_init_internal::MaybeZeroable;
 /// # #![expect(clippy::disallowed_names)]
 /// # #![feature(allocator_api)]
 /// # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
-/// # use pin_init::*;
+/// # use pinned_init::*;
 /// # use core::pin::Pin;
 /// #[pin_data]
 /// struct Foo {
@@ -516,7 +516,7 @@ macro_rules! stack_pin_init {
 /// # #![feature(allocator_api)]
 /// # #[path = "../examples/error.rs"] mod error; use error::Error;
 /// # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
-/// # use pin_init::*;
+/// # use pinned_init::*;
 /// #[pin_data]
 /// struct Foo {
 ///     #[pin]
@@ -543,7 +543,7 @@ macro_rules! stack_pin_init {
 /// # #![feature(allocator_api)]
 /// # #[path = "../examples/error.rs"] mod error; use error::Error;
 /// # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
-/// # use pin_init::*;
+/// # use pinned_init::*;
 /// #[pin_data]
 /// struct Foo {
 ///     #[pin]
@@ -592,7 +592,7 @@ macro_rules! stack_try_pin_init {
 /// The syntax is almost identical to that of a normal `struct` initializer:
 ///
 /// ```rust
-/// # use pin_init::*;
+/// # use pinned_init::*;
 /// # use core::pin::Pin;
 /// #[pin_data]
 /// struct Foo {
@@ -636,7 +636,7 @@ macro_rules! stack_try_pin_init {
 /// To create an initializer function, simply declare it like this:
 ///
 /// ```rust
-/// # use pin_init::*;
+/// # use pinned_init::*;
 /// # use core::pin::Pin;
 /// # #[pin_data]
 /// # struct Foo {
@@ -663,7 +663,7 @@ macro_rules! stack_try_pin_init {
 ///
 /// ```rust
 /// # #![expect(clippy::disallowed_names)]
-/// # use pin_init::*;
+/// # use pinned_init::*;
 /// # use core::pin::Pin;
 /// # #[pin_data]
 /// # struct Foo {
@@ -690,7 +690,7 @@ macro_rules! stack_try_pin_init {
 /// They can also easily embed it into their own `struct`s:
 ///
 /// ```rust
-/// # use pin_init::*;
+/// # use pinned_init::*;
 /// # use core::pin::Pin;
 /// # #[pin_data]
 /// # struct Foo {
@@ -749,7 +749,7 @@ macro_rules! stack_try_pin_init {
 /// For instance:
 ///
 /// ```rust
-/// # use pin_init::*;
+/// # use pinned_init::*;
 /// # use core::{ptr::addr_of_mut, marker::PhantomPinned};
 /// #[pin_data]
 /// #[derive(Zeroable)]
@@ -805,7 +805,7 @@ macro_rules! pin_init {
 /// ```rust
 /// # #![feature(allocator_api)]
 /// # #[path = "../examples/error.rs"] mod error; use error::Error;
-/// use pin_init::{pin_data, try_pin_init, PinInit, InPlaceInit, init_zeroed};
+/// use pinned_init::{pin_data, try_pin_init, PinInit, InPlaceInit, init_zeroed};
 ///
 /// #[pin_data]
 /// struct BigBuf {
@@ -865,8 +865,8 @@ macro_rules! try_pin_init {
 /// # #![feature(allocator_api)]
 /// # #[path = "../examples/error.rs"] mod error; use error::Error;
 /// # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
-/// # use pin_init::InPlaceInit;
-/// use pin_init::{init, Init, init_zeroed};
+/// # use pinned_init::InPlaceInit;
+/// use pinned_init::{init, Init, init_zeroed};
 ///
 /// struct BigBuf {
 ///     small: [u8; 1024 * 1024],
@@ -912,8 +912,8 @@ macro_rules! init {
 /// ```rust
 /// # #![feature(allocator_api)]
 /// # use core::alloc::AllocError;
-/// # use pin_init::InPlaceInit;
-/// use pin_init::{try_init, Init, init_zeroed};
+/// # use pinned_init::InPlaceInit;
+/// use pinned_init::{try_init, Init, init_zeroed};
 ///
 /// struct BigBuf {
 ///     big: Box<[u8; 1024 * 1024 * 1024]>,
@@ -957,7 +957,7 @@ macro_rules! try_init {
 ///
 /// This will succeed:
 /// ```
-/// use pin_init::{pin_data, assert_pinned};
+/// use pinned_init::{pin_data, assert_pinned};
 ///
 /// #[pin_data]
 /// struct MyStruct {
@@ -970,7 +970,7 @@ macro_rules! try_init {
 ///
 /// This will fail:
 /// ```compile_fail
-/// use pin_init::{pin_data, assert_pinned};
+/// use pinned_init::{pin_data, assert_pinned};
 ///
 /// #[pin_data]
 /// struct MyStruct {
@@ -985,7 +985,7 @@ macro_rules! try_init {
 /// only be used when the macro is invoked from a function body.
 /// ```
 /// # use core::pin::Pin;
-/// use pin_init::{pin_data, assert_pinned};
+/// use pinned_init::{pin_data, assert_pinned};
 ///
 /// #[pin_data]
 /// struct Foo<T> {
@@ -1073,7 +1073,7 @@ pub unsafe trait PinInit<T: ?Sized, E = Infallible>: Sized {
     /// ```rust
     /// # #![feature(allocator_api)]
     /// # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
-    /// # use pin_init::*;
+    /// # use pinned_init::*;
     /// let mtx_init = CMutex::new(42);
     /// // Make the initializer print the value.
     /// let mtx_init = mtx_init.pin_chain(|mtx| {
@@ -1170,7 +1170,7 @@ pub unsafe trait Init<T: ?Sized, E = Infallible>: PinInit<T, E> {
     ///
     /// ```rust
     /// # #![expect(clippy::disallowed_names)]
-    /// use pin_init::{init, init_zeroed, Init};
+    /// use pinned_init::{init, init_zeroed, Init};
     ///
     /// struct Foo {
     ///     buf: [u8; 1_000_000],
@@ -1314,8 +1314,8 @@ pub fn uninit<T, E>() -> impl Init<MaybeUninit<T>, E> {
 /// # Examples
 ///
 /// ```rust
-/// # use pin_init::*;
-/// use pin_init::init_array_from_fn;
+/// # use pinned_init::*;
+/// use pinned_init::init_array_from_fn;
 /// let array: Box<[usize; 1_000]> = Box::init(init_array_from_fn(|i| i)).unwrap();
 /// assert_eq!(array.len(), 1_000);
 /// ```
@@ -1354,9 +1354,9 @@ where
 /// ```rust
 /// # #![feature(allocator_api)]
 /// # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
-/// # use pin_init::*;
+/// # use pinned_init::*;
 /// # use core::pin::Pin;
-/// use pin_init::pin_init_array_from_fn;
+/// use pinned_init::pin_init_array_from_fn;
 /// use std::sync::Arc;
 /// let array: Pin<Arc<[CMutex<usize>; 1_000]>> =
 ///     Arc::pin_init(pin_init_array_from_fn(|i| CMutex::new(i))).unwrap();
@@ -1454,7 +1454,7 @@ pub trait InPlaceWrite<T> {
 /// ```rust
 /// # #![feature(allocator_api)]
 /// # #[path = "../examples/mutex.rs"] mod mutex; use mutex::*;
-/// # use pin_init::*;
+/// # use pinned_init::*;
 /// use core::pin::Pin;
 /// #[pin_data(PinnedDrop)]
 /// struct Foo {
@@ -1515,7 +1515,7 @@ pub unsafe trait Zeroable {
     /// # Examples
     ///
     /// ```
-    /// use pin_init::{Zeroable, zeroed};
+    /// use pinned_init::{Zeroable, zeroed};
     ///
     /// #[derive(Zeroable)]
     /// struct Point {
@@ -1579,7 +1579,7 @@ pub fn init_zeroed<T: Zeroable>() -> impl Init<T> {
 /// # Examples
 ///
 /// ```
-/// use pin_init::{Zeroable, zeroed};
+/// use pinned_init::{Zeroable, zeroed};
 ///
 /// #[derive(Zeroable)]
 /// struct Point {
@@ -1687,7 +1687,7 @@ impl_fn_zeroable_option!(["Rust", "C"] { A, B, C, D, E, F, G, H, I, J, K, L, M, 
 ///
 /// ```
 /// # use core::cell::UnsafeCell;
-/// # use pin_init::{pin_data, pin_init, Wrapper};
+/// # use pinned_init::{pin_data, pin_init, Wrapper};
 ///
 /// #[pin_data]
 /// struct Foo {}

@@ -1,5 +1,5 @@
 #![feature(allocator_api)]
-use pin_init::*;
+use pinned_init::*;
 
 #[pin_data]
 struct Foo {

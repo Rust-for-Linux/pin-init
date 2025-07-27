@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use pin_init::*;
+use pinned_init::*;
 
 // Struct with size over 1GiB
 #[derive(Debug)]

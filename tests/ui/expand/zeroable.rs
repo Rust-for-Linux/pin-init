@@ -1,4 +1,4 @@
-use pin_init::*;
+use pinned_init::*;
 
 #[derive(Zeroable)]
 struct Foo {

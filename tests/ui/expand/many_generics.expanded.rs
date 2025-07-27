@@ -1,6 +1,6 @@
 #![feature(lint_reasons)]
 use core::{marker::PhantomPinned, pin::Pin};
-use pin_init::*;
+use pinned_init::*;
 trait Bar<'a, const ID: usize = 0> {
     fn bar(&mut self);
 }
@@ -49,23 +49,23 @@ const _: () = {
         unsafe fn _pin<E>(
             self,
             slot: *mut PhantomPinned,
-            init: impl ::pin_init::PinInit<PhantomPinned, E>,
+            init: impl ::pinned_init::PinInit<PhantomPinned, E>,
         ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::PinInit::__pinned_init(init, slot) }
+            unsafe { ::pinned_init::PinInit::__pinned_init(init, slot) }
         }
         unsafe fn array<E>(
             self,
             slot: *mut [u8; 1024 * 1024],
-            init: impl ::pin_init::Init<[u8; 1024 * 1024], E>,
+            init: impl ::pinned_init::Init<[u8; 1024 * 1024], E>,
         ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::Init::__init(init, slot) }
+            unsafe { ::pinned_init::Init::__init(init, slot) }
         }
         unsafe fn r<E>(
             self,
             slot: *mut &'b mut [&'a mut T; SIZE],
-            init: impl ::pin_init::Init<&'b mut [&'a mut T; SIZE], E>,
+            init: impl ::pinned_init::Init<&'b mut [&'a mut T; SIZE], E>,
         ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::Init::__init(init, slot) }
+            unsafe { ::pinned_init::Init::__init(init, slot) }
         }
     }
     unsafe impl<
@@ -73,7 +73,7 @@ const _: () = {
         'b: 'a,
         T: Bar<'b> + ?Sized + 'a,
         const SIZE: usize,
-    > ::pin_init::__internal::HasPinData for Foo<'a, 'b, T, SIZE>
+    > ::pinned_init::__internal::HasPinData for Foo<'a, 'b, T, SIZE>
     where
         T: Bar<'a, 1>,
     {
@@ -89,7 +89,7 @@ const _: () = {
         'b: 'a,
         T: Bar<'b> + ?Sized + 'a,
         const SIZE: usize,
-    > ::pin_init::__internal::PinData for __ThePinData<'a, 'b, T, SIZE>
+    > ::pinned_init::__internal::PinData for __ThePinData<'a, 'b, T, SIZE>
     where
         T: Bar<'a, 1>,
     {
@@ -125,8 +125,8 @@ const _: () = {
     {
         fn drop(&mut self) {
             let pinned = unsafe { ::core::pin::Pin::new_unchecked(self) };
-            let token = unsafe { ::pin_init::__internal::OnlyCallFromDrop::new() };
-            ::pin_init::PinnedDrop::drop(pinned, token);
+            let token = unsafe { ::pinned_init::__internal::OnlyCallFromDrop::new() };
+            ::pinned_init::PinnedDrop::drop(pinned, token);
         }
     }
 };
@@ -135,11 +135,11 @@ unsafe impl<
     'b: 'a,
     T: Bar<'b> + ?Sized + 'a,
     const SIZE: usize,
-> ::pin_init::PinnedDrop for Foo<'a, 'b, T, SIZE>
+> ::pinned_init::PinnedDrop for Foo<'a, 'b, T, SIZE>
 where
     T: Bar<'b, 1>,
 {
-    fn drop(self: Pin<&mut Self>, _: ::pin_init::__internal::OnlyCallFromDrop) {
+    fn drop(self: Pin<&mut Self>, _: ::pinned_init::__internal::OnlyCallFromDrop) {
         let me = unsafe { Pin::get_unchecked_mut(self) };
         for t in &mut *me.r {
             Bar::<'a, 1>::bar(*t);

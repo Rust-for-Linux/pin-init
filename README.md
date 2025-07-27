@@ -78,7 +78,7 @@ If you want to use [`PinInit`], then you will have to annotate your `struct` wit
 that you need to write `<-` instead of `:` for fields that you want to initialize in-place.
 
 ```rust
-use pin_init::{pin_data, pin_init, InPlaceInit};
+use pinned_init::{pin_data, pin_init, InPlaceInit};
 
 #[pin_data]
 struct Foo {
@@ -125,7 +125,7 @@ impl DriverData {
     fn new() -> impl PinInit<Self, Error> {
         try_pin_init!(Self {
             status <- CMutex::new(0),
-            buffer: Box::init(pin_init::init_zeroed())?,
+            buffer: Box::init(pinned_init::init_zeroed())?,
         }? Error)
     }
 }
@@ -146,7 +146,7 @@ actually does the initialization in the correct way. Here are the things to look
   `slot` gets called.
 
 ```rust
-use pin_init::{pin_data, pinned_drop, PinInit, PinnedDrop, pin_init_from_closure};
+use pinned_init::{pin_data, pinned_drop, PinInit, PinnedDrop, pin_init_from_closure};
 use core::{
     ptr::addr_of_mut,
     marker::PhantomPinned,
@@ -223,10 +223,10 @@ the `kernel` crate. The [`sync`] module is a good starting point.
 [`sync`]: https://rust.docs.kernel.org/kernel/sync/index.html
 [pinning]: https://doc.rust-lang.org/std/pin/index.html
 [structurally pinned fields]: https://doc.rust-lang.org/std/pin/index.html#projections-and-structural-pinning
-[stack]: https://docs.rs/pin-init/latest/pin_init/macro.stack_pin_init.html
-[`impl PinInit<Foo>`]: https://docs.rs/pin-init/latest/pin_init/trait.PinInit.html
-[`impl PinInit<T, E>`]: https://docs.rs/pin-init/latest/pin_init/trait.PinInit.html
-[`impl Init<T, E>`]: https://docs.rs/pin-init/latest/pin_init/trait.Init.html
+[stack]: https://docs.rs/pinned-init/latest/pinned_init/macro.stack_pin_init.html
+[`impl PinInit<Foo>`]: https://docs.rs/pinned-init/latest/pinned_init/trait.PinInit.html
+[`impl PinInit<T, E>`]: https://docs.rs/pinned-init/latest/pinned_init/trait.PinInit.html
+[`impl Init<T, E>`]: https://docs.rs/pinned-init/latest/pinned_init/trait.Init.html
 [Rust-for-Linux]: https://rust-for-linux.com/
 
 <!-- cargo-rdme end -->

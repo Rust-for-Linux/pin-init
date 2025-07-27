@@ -1,4 +1,4 @@
-use pin_init::*;
+use pinned_init::*;
 use std::pin::Pin;
 
 #[pin_data(PinnedDrop)]

@@ -37,7 +37,7 @@ pub(crate) fn parse_zeroable_derive_input(
             // If we find a `,`, then we have finished a generic/constant/lifetime parameter.
             TokenTree::Punct(p) if nested == 0 && p.as_char() == ',' => {
                 if in_generic && !inserted {
-                    new_impl_generics.extend(quote! { : ::pin_init::Zeroable });
+                    new_impl_generics.extend(quote! { : ::pinned_init::Zeroable });
                 }
                 in_generic = true;
                 inserted = false;
@@ -51,7 +51,7 @@ pub(crate) fn parse_zeroable_derive_input(
             TokenTree::Punct(p) if nested == 0 && p.as_char() == ':' => {
                 new_impl_generics.push(tt);
                 if in_generic {
-                    new_impl_generics.extend(quote! { ::pin_init::Zeroable + });
+                    new_impl_generics.extend(quote! { ::pinned_init::Zeroable + });
                     inserted = true;
                 }
             }
@@ -69,7 +69,7 @@ pub(crate) fn parse_zeroable_derive_input(
     }
     assert_eq!(nested, 0);
     if in_generic && !inserted {
-        new_impl_generics.extend(quote! { : ::pin_init::Zeroable });
+        new_impl_generics.extend(quote! { : ::pinned_init::Zeroable });
     }
     (rest, new_impl_generics, ty_generics, last)
 }
@@ -77,7 +77,7 @@ pub(crate) fn parse_zeroable_derive_input(
 pub(crate) fn derive(input: TokenStream) -> TokenStream {
     let (rest, new_impl_generics, ty_generics, last) = parse_zeroable_derive_input(input);
     quote! {
-        ::pin_init::__derive_zeroable!(
+        ::pinned_init::__derive_zeroable!(
             parse_input:
                 @sig(#(#rest)*),
                 @impl_generics(#(#new_impl_generics)*),
@@ -90,7 +90,7 @@ pub(crate) fn derive(input: TokenStream) -> TokenStream {
 pub(crate) fn maybe_derive(input: TokenStream) -> TokenStream {
     let (rest, new_impl_generics, ty_generics, last) = parse_zeroable_derive_input(input);
     quote! {
-        ::pin_init::__maybe_derive_zeroable!(
+        ::pinned_init::__maybe_derive_zeroable!(
             parse_input:
                 @sig(#(#rest)*),
                 @impl_generics(#(#new_impl_generics)*),

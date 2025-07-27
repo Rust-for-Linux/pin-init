@@ -1,7 +1,7 @@
 #![cfg_attr(not(RUSTC_LINT_REASONS_IS_STABLE), feature(lint_reasons))]
 
 use core::{marker::PhantomPinned, pin::Pin};
-use pin_init::*;
+use pinned_init::*;
 
 trait Bar<'a, const ID: usize = 0> {
     fn bar(&mut self);

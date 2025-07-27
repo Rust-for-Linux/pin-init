@@ -11,7 +11,7 @@ use core::{
     pin::Pin,
     ptr::{self, addr_of_mut},
 };
-use pin_init::*;
+use pinned_init::*;
 #[cfg(feature = "std")]
 use std::sync::Arc;
 #[cfg(all(not(feature = "std"), feature = "alloc"))]

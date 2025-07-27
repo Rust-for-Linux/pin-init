@@ -1,4 +1,4 @@
-use pin_init::*;
+use pinned_init::*;
 
 struct Foo<T> {
     value: T,

@@ -1,12 +1,12 @@
-use pin_init::*;
+use pinned_init::*;
 struct Foo {
     a: usize,
     pub(crate) b: usize,
 }
 #[automatically_derived]
-unsafe impl ::pin_init::Zeroable for Foo {}
+unsafe impl ::pinned_init::Zeroable for Foo {}
 const _: () = {
-    fn assert_zeroable<T: ?::core::marker::Sized + ::pin_init::Zeroable>() {}
+    fn assert_zeroable<T: ?::core::marker::Sized + ::pinned_init::Zeroable>() {}
     fn ensure_zeroable() {
         assert_zeroable::<usize>();
         assert_zeroable::<usize>();
@@ -17,10 +17,10 @@ struct Bar {
     b: &'static usize,
 }
 #[automatically_derived]
-unsafe impl ::pin_init::Zeroable for Bar
+unsafe impl ::pinned_init::Zeroable for Bar
 where
-    usize: for<'__dummy> ::pin_init::Zeroable,
-    &'static usize: for<'__dummy> ::pin_init::Zeroable,
+    usize: for<'__dummy> ::pinned_init::Zeroable,
+    &'static usize: for<'__dummy> ::pinned_init::Zeroable,
 {}
 trait Trait {}
 struct WithGenerics<'a, T, U: Trait> {
@@ -30,12 +30,16 @@ struct WithGenerics<'a, T, U: Trait> {
 #[automatically_derived]
 unsafe impl<
     'a,
-    T: ::pin_init::Zeroable,
-    U: ::pin_init::Zeroable + Trait,
-> ::pin_init::Zeroable for WithGenerics<'a, T, U> {}
+    T: ::pinned_init::Zeroable,
+    U: ::pinned_init::Zeroable + Trait,
+> ::pinned_init::Zeroable for WithGenerics<'a, T, U> {}
 const _: () = {
-    fn assert_zeroable<T: ?::core::marker::Sized + ::pin_init::Zeroable>() {}
-    fn ensure_zeroable<'a, T: ::pin_init::Zeroable, U: ::pin_init::Zeroable + Trait>() {
+    fn assert_zeroable<T: ?::core::marker::Sized + ::pinned_init::Zeroable>() {}
+    fn ensure_zeroable<
+        'a,
+        T: ::pinned_init::Zeroable,
+        U: ::pinned_init::Zeroable + Trait,
+    >() {
         assert_zeroable::<T>();
         assert_zeroable::<&'a U>();
     }
