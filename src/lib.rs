@@ -1,5 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+//! <div class="warning">
+//!
+//! # **Warning:** This crate will migrate to the `pin-init` crate in a future version.
+//!
+//! * A new version of the `pinned-init` crate will be released stating which is the version of
+//!   `pin-init` to upgrade to.
+//! * No further updates will happen under the name `pinned-init` and all users should change to
+//!   use `pin-init` instead.
+//! * As of writing the migration has not yet been started, so the `pin-init` crate is currently
+//!   not a drop-in replacement for this crate.
+//! * You can follow development of this crate over at <https://github.com/Rust-for-Linux/pin-init>
+//!   (that repository already has been renamed). The `pinned-init` crate's contents are found in
+//!   the [legacy branch].
+//!
+//! [legacy branch]: https://github.com/Rust-for-Linux/pin-init/tree/legacy
+//!
+//! </div>
+//!
+//!
+//!
 //! Library to safely and fallibly initialize pinned `struct`s using in-place constructors.
 //!
 //! [Pinning][pinning] is Rust's way of ensuring data does not move.
