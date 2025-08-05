@@ -51,11 +51,17 @@ where
 ///
 /// # Safety
 ///
-/// Only the `init` module is allowed to use this trait.
+/// This `unsafe trait` should only be implemented by the `#[pin_data]` macro. The implementer must ensure:
+/// - `Self::PinData` is the correct metadata type for `Self` and implements `PinData<Datee = Self>`
+/// - `__pin_data()` returns a valid instance that accurately reflects the structural pinning and field layout of `Self`
+/// - The metadata provides sound field accessors that uphold their safety contracts
+/// - Incorrect metadata can lead to undefined behavior when used by the pin-init system
 pub unsafe trait HasPinData {
     type PinData: PinData;
 
-    #[expect(clippy::missing_safety_doc)]
+    /// # Safety
+    ///
+    /// This method should only be called by macros in the pin-init crate.
     unsafe fn __pin_data() -> Self::PinData;
 }
 
@@ -63,7 +69,12 @@ pub unsafe trait HasPinData {
 ///
 /// # Safety
 ///
-/// Only the `init` module is allowed to use this trait.
+/// This `unsafe trait` should only be implemented by the `#[pin_data]` macro for its generated
+/// metadata struct. The implementer must ensure:
+/// - `Self` is `Copy`
+/// - `Self::Datee` is the correct struct type implementing `HasPinData<PinData = Self>`
+/// - Generated field accessors uphold their safety contracts and correctly use the appropriate
+///   initialization methods
 pub unsafe trait PinData: Copy {
     type Datee: ?Sized + HasPinData;
 
@@ -81,11 +92,16 @@ pub unsafe trait PinData: Copy {
 ///
 /// # Safety
 ///
-/// Only the `init` module is allowed to use this trait.
+/// This `unsafe trait` should only be implemented by the `pin-init` macro system. The implementer must ensure:
+/// - `Self::InitData` accurately represents the initialization structure of `Self`
+/// - `__init_data()` returns a valid metadata instance for this type
+/// - The metadata correctly reflects the field layout and initialization requirements
 pub unsafe trait HasInitData {
     type InitData: InitData;
 
-    #[expect(clippy::missing_safety_doc)]
+    /// # Safety
+    ///
+    /// This method should only be called by macros in the pin-init crate.
     unsafe fn __init_data() -> Self::InitData;
 }
 
@@ -93,7 +109,10 @@ pub unsafe trait HasInitData {
 ///
 /// # Safety
 ///
-/// Only the `init` module is allowed to use this trait.
+/// This `unsafe trait` should only be implemented by the `pin-init` macro system. The implementer must ensure:
+/// - `Self` is `Copy`
+/// - `Self::Datee` correctly corresponds to the type `Self` represents for initialization purposes
+/// - The trait is used consistently within the pin-init system
 pub unsafe trait InitData: Copy {
     type Datee: ?Sized + HasInitData;
 
@@ -116,12 +135,16 @@ impl<T: ?Sized> Clone for AllData<T> {
 
 impl<T: ?Sized> Copy for AllData<T> {}
 
-// SAFETY: TODO.
+// SAFETY: This implementation upholds the `InitData` invariants that `AllData<T>` is `Copy`, and
+// `Self::Datee` is `T`, which correctly represents the type `AllData<T>` is concerned with
+// for initialization, as used by the `pin_init!` macros. The `make_closure` method is inherited
+// and is a safe identity function, fulfilling trait expectations.
 unsafe impl<T: ?Sized> InitData for AllData<T> {
     type Datee = T;
 }
 
-// SAFETY: TODO.
+// SAFETY: `__init_data` returns `AllData<T>` which is a correct `InitData` implementation
+// for type `T`. The function itself performs no unsafe memory operations.
 unsafe impl<T: ?Sized> HasInitData for T {
     type InitData = AllData<T>;
 
