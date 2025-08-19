@@ -3,8 +3,8 @@
 version = 4
 
 [[package]]
-name = "pin-init-internal"
-version = "0.0.5"
+name = "pinned-init-macro"
+version = "0.0.6"
 dependencies = [
  "proc-macro2",
  "quote",

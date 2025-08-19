@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.10] - 2025-08-19
+
 ### Added
 
 - `Wrapper<T>` trait added for creating wrapper structs with a structurally pinned value.
@@ -93,7 +95,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.0.6] - 2023-04-08
 
-[unreleased]: https://github.com/Rust-for-Linux/pin-init/compare/v0.0.9...HEAD
+[unreleased]: https://github.com/Rust-for-Linux/pin-init/compare/v0.0.10...HEAD
+[0.0.10]: https://github.com/Rust-for-Linux/pin-init/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/Rust-for-Linux/pin-init/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/Rust-for-Linux/pin-init/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/Rust-for-Linux/pin-init/compare/v0.0.6...v0.0.7
