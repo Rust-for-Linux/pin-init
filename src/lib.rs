@@ -295,6 +295,10 @@ pub mod __internal;
 #[doc(hidden)]
 pub mod macros;
 
+pub mod option;
+
+extern crate self as pin_init;
+
 #[cfg(any(feature = "std", feature = "alloc"))]
 mod alloc;
 #[cfg(any(feature = "std", feature = "alloc"))]
