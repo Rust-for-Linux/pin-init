@@ -763,7 +763,10 @@ macro_rules! stack_try_pin_init {
 ///
 /// let init = pin_init!(&this in Buf {
 ///     buf: [0; 64],
-///     // SAFETY: TODO.
+///     // SAFETY: `this.as_ptr()` (within `pin_init!(&this in ...)` context) yields a `*mut Buf`
+///     // that the macro guarantees is valid for initialization (non-null, aligned, points to memory for `Buf`).
+///     // This makes it dereferenceable for `addr_of_mut!`, which safely creates a raw pointer to the `buf` field,
+///     // even if uninitialized, as it avoids creating a reference.
 ///     ptr: unsafe { addr_of_mut!((*this.as_ptr()).buf).cast() },
 ///     pin: PhantomPinned,
 /// });
@@ -1405,28 +1408,6 @@ unsafe impl<T> PinInit<T> for T {
     unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), Infallible> {
         // SAFETY: `slot` is valid for writes by the safety requirements of this function.
         unsafe { slot.write(self) };
-        Ok(())
-    }
-}
-
-// SAFETY: when the `__init` function returns with
-// - `Ok(())`, `slot` was initialized and all pinned invariants of `T` are upheld.
-// - `Err(err)`, slot was not written to.
-unsafe impl<T, E> Init<T, E> for Result<T, E> {
-    unsafe fn __init(self, slot: *mut T) -> Result<(), E> {
-        // SAFETY: `slot` is valid for writes by the safety requirements of this function.
-        unsafe { slot.write(self?) };
-        Ok(())
-    }
-}
-
-// SAFETY: when the `__pinned_init` function returns with
-// - `Ok(())`, `slot` was initialized and all pinned invariants of `T` are upheld.
-// - `Err(err)`, slot was not written to.
-unsafe impl<T, E> PinInit<T, E> for Result<T, E> {
-    unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), E> {
-        // SAFETY: `slot` is valid for writes by the safety requirements of this function.
-        unsafe { slot.write(self?) };
         Ok(())
     }
 }
