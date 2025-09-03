@@ -29,6 +29,7 @@ mod quote;
 extern crate quote;
 
 mod helpers;
+mod init;
 mod pin_data;
 mod pinned_drop;
 mod zeroable;
@@ -51,4 +52,9 @@ pub fn derive_zeroable(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(MaybeZeroable)]
 pub fn maybe_derive_zeroable(input: TokenStream) -> TokenStream {
     zeroable::maybe_derive(input.into()).into()
+}
+
+#[proc_macro]
+pub fn init(input: TokenStream) -> TokenStream {
+    init::expand(input.into()).into()
 }
