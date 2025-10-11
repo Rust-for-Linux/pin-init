@@ -1,0 +1,23 @@
+error: no rules expected keyword `enum`
+ --> tests/ui/compile-fail/zeroable/enum.rs:5:1
+  |
+5 | enum Num {
+  | ^^^^ no rules expected this token in macro call
+  |
+note: while trying to match keyword `struct`
+ --> src/macros.rs
+  |
+  |             $vis:vis struct $name:ident
+  |                      ^^^^^^
+
+error: no rules expected keyword `enum`
+  --> tests/ui/compile-fail/zeroable/enum.rs:11:1
+   |
+11 | enum Num2 {
+   | ^^^^ no rules expected this token in macro call
+   |
+note: while trying to match keyword `struct`
+  --> src/macros.rs
+   |
+   |             $vis:vis struct $name:ident
+   |                      ^^^^^^
