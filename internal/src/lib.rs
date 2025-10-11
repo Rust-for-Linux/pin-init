@@ -25,7 +25,11 @@ pub fn pin_data(inner: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn pinned_drop(args: TokenStream, input: TokenStream) -> TokenStream {
-    pinned_drop::pinned_drop(args.into(), input.into()).into()
+    pinned_drop::pinned_drop(
+        parse_macro_input!(args as _),
+        parse_macro_input!(input as _),
+    )
+    .into()
 }
 
 #[proc_macro_derive(Zeroable)]

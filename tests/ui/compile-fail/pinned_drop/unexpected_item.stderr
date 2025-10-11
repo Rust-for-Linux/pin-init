@@ -1,11 +1,13 @@
-error: no rules expected keyword `const`
+error[E0438]: const `BAZ` is not a member of trait `pin_init::PinnedDrop`
  --> tests/ui/compile-fail/pinned_drop/unexpected_item.rs:8:5
   |
 8 |     const BAZ: usize = 0;
-  |     ^^^^^ no rules expected this token in macro call
+  |     ^^^^^^^^^^^^^^^^^^^^^ not a member of trait `pin_init::PinnedDrop`
+
+error[E0046]: not all trait items implemented, missing: `drop`
+ --> tests/ui/compile-fail/pinned_drop/unexpected_item.rs:7:1
   |
-note: while trying to match keyword `fn`
- --> src/macros.rs
+7 | impl PinnedDrop for Foo {
+  | ^^^^^^^^^^^^^^^^^^^^^^^ missing `drop` in implementation
   |
-  |             fn drop($($sig:tt)*) {
-  |             ^^
+  = help: implement the missing item: `fn drop(self: Pin<&mut Self>, _: OnlyCallFromDrop) { todo!() }`

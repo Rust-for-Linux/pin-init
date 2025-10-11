@@ -1,4 +1,5 @@
 use pin_init::*;
+use std::pin::Pin;
 
 #[pin_data(PinnedDrop)]
 struct Foo {}
