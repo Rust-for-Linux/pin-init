@@ -1,11 +1,5 @@
-error: no rules expected keyword `const`
-  --> tests/ui/compile-fail/pinned_drop/unexpected_additional_item.rs:10:5
+error[E0438]: const `BAZ` is not a member of trait `pin_init::PinnedDrop`
+  --> tests/ui/compile-fail/pinned_drop/unexpected_additional_item.rs:11:5
    |
-10 |     const BAZ: usize = 0;
-   |     ^^^^^ no rules expected this token in macro call
-   |
-note: while trying to match `)`
-  --> src/macros.rs
-   |
-   |         ),
-   |         ^
+11 |     const BAZ: usize = 0;
+   |     ^^^^^^^^^^^^^^^^^^^^^ not a member of trait `pin_init::PinnedDrop`
