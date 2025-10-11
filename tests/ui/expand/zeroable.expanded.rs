@@ -31,11 +31,11 @@ struct WithGenerics<'a, T, U: Trait> {
 unsafe impl<
     'a,
     T: ::pin_init::Zeroable,
-    U: ::pin_init::Zeroable + Trait,
+    U: Trait + ::pin_init::Zeroable,
 > ::pin_init::Zeroable for WithGenerics<'a, T, U> {}
 const _: () = {
     fn assert_zeroable<T: ?::core::marker::Sized + ::pin_init::Zeroable>() {}
-    fn ensure_zeroable<'a, T: ::pin_init::Zeroable, U: ::pin_init::Zeroable + Trait>() {
+    fn ensure_zeroable<'a, T: ::pin_init::Zeroable, U: Trait + ::pin_init::Zeroable>() {
         assert_zeroable::<T>();
         assert_zeroable::<&'a U>();
     }

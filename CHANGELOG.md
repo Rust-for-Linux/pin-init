@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   code at that point.
 - Make the `[try_][pin_]init!` macros expose initialized fields via a `let`
   binding as `&mut T` or `Pin<&mut T>` for later fields.
+- `derive([Maybe]Zeroable)` now support tuple structs
 
 ## [0.0.10] - 2025-08-19
 
