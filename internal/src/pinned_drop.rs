@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-#[cfg(not(kernel))]
-use proc_macro2 as proc_macro;
-
-use proc_macro::{TokenStream, TokenTree};
+use proc_macro2::{TokenStream, TokenTree};
+use quote::quote;
 
 pub(crate) fn pinned_drop(_args: TokenStream, input: TokenStream) -> TokenStream {
     let mut toks = input.into_iter().collect::<Vec<_>>();
