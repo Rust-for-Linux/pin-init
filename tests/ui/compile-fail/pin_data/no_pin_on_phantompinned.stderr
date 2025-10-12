@@ -1,31 +1,46 @@
-error: The field `pin1` of type `PhantomPinned` only has an effect, if it has the `#[pin]` attribute.
- --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:4:1
+error: The field `pin1` of type `PhantomData` only has an effect if it has the `#[pin]` attribute
+ --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:6:5
   |
-4 | #[pin_data]
-  | ^^^^^^^^^^^
-  |
-  = note: this error originates in the macro `$crate::__pin_data` which comes from the expansion of the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+6 |     pin1: PhantomPinned,
+  |     ^^^^^^^^^^^^^^^^^^^
 
-error: The field `pin2` of type `PhantomPinned` only has an effect, if it has the `#[pin]` attribute.
- --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:4:1
+error: The field `pin2` of type `PhantomData` only has an effect if it has the `#[pin]` attribute
+ --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:7:5
   |
-4 | #[pin_data]
-  | ^^^^^^^^^^^
-  |
-  = note: this error originates in the macro `$crate::__pin_data` which comes from the expansion of the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+7 |     pin2: marker::PhantomPinned,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-error: The field `pin3` of type `PhantomPinned` only has an effect, if it has the `#[pin]` attribute.
- --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:4:1
+error: The field `pin3` of type `PhantomData` only has an effect if it has the `#[pin]` attribute
+ --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:8:5
   |
-4 | #[pin_data]
-  | ^^^^^^^^^^^
-  |
-  = note: this error originates in the macro `$crate::__pin_data` which comes from the expansion of the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+8 |     pin3: core::marker::PhantomPinned,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-error: The field `pin4` of type `PhantomPinned` only has an effect, if it has the `#[pin]` attribute.
- --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:4:1
+error: The field `pin4` of type `PhantomData` only has an effect if it has the `#[pin]` attribute
+ --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:9:5
   |
-4 | #[pin_data]
-  | ^^^^^^^^^^^
+9 |     pin4: ::core::marker::PhantomPinned,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0412]: cannot find type `PhantomPinned` in this scope
+ --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:6:11
   |
-  = note: this error originates in the macro `$crate::__pin_data` which comes from the expansion of the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+6 |     pin1: PhantomPinned,
+  |           ^^^^^^^^^^^^^ not found in this scope
+  |
+help: consider importing this struct
+  |
+1 + use std::marker::PhantomPinned;
+  |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `marker`
+ --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:7:11
+  |
+7 |     pin2: marker::PhantomPinned,
+  |           ^^^^^^ use of unresolved module or unlinked crate `marker`
+  |
+  = help: if you wanted to use a crate named `marker`, use `cargo add marker` to add it to your `Cargo.toml`
+help: consider importing this module
+  |
+1 + use std::marker;
+  |
