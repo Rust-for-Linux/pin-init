@@ -1,16 +1,4 @@
-error: no rules expected keyword `fn`
- --> tests/ui/compile-fail/pin_data/unexpected_item.rs:4:1
-  |
-4 | fn foo() {}
-  | ^^ no rules expected this token in macro call
-  |
-note: while trying to match keyword `struct`
- --> src/macros.rs
-  |
-  |             $vis:vis struct $name:ident
-  |                      ^^^^^^
-
-error: Could not locate type name.
+error: `#[pin_data]` can only be applied to struct, enum and union defintions
  --> tests/ui/compile-fail/pin_data/unexpected_item.rs:3:1
   |
 3 | #[pin_data]

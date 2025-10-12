@@ -4,10 +4,11 @@ struct Foo {
     array: [u8; 1024 * 1024],
     _pin: PhantomPinned,
 }
-#[doc(hidden)]
+/// Pin-projections of [`Foo`]
+#[allow(dead_code)]
 struct FooProjection<'__pin> {
-    _pin: ::core::pin::Pin<&'__pin mut PhantomPinned>,
     array: &'__pin mut [u8; 1024 * 1024],
+    _pin: ::core::pin::Pin<&'__pin mut PhantomPinned>,
     ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut ()>,
 }
 impl Foo {
@@ -18,19 +19,19 @@ impl Foo {
     ///
     /// These fields are **not** structurally pinned:
     /// - `array`
-    #[inline]
     fn project<'__pin>(
         self: ::core::pin::Pin<&'__pin mut Self>,
     ) -> FooProjection<'__pin> {
         let this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
         FooProjection {
-            _pin: unsafe { ::core::pin::Pin::new_unchecked(&mut this._pin) },
             array: &mut this.array,
+            _pin: unsafe { ::core::pin::Pin::new_unchecked(&mut this._pin) },
             ___pin_phantom_data: ::core::marker::PhantomData,
         }
     }
 }
 const _: () = {
+    #[doc(hidden)]
     struct __ThePinData {
         __phantom: ::core::marker::PhantomData<fn(Foo) -> Foo>,
     }
@@ -43,19 +44,12 @@ const _: () = {
     #[allow(dead_code)]
     #[expect(clippy::missing_safety_doc)]
     impl __ThePinData {
-        unsafe fn _pin<E>(
-            self,
-            slot: *mut PhantomPinned,
-            init: impl ::pin_init::PinInit<PhantomPinned, E>,
-        ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::PinInit::__pinned_init(init, slot) }
-        }
-        unsafe fn __project__pin<'__slot>(
-            self,
-            slot: &'__slot mut PhantomPinned,
-        ) -> ::core::pin::Pin<&'__slot mut PhantomPinned> {
-            ::core::pin::Pin::new_unchecked(slot)
-        }
+        /// # Safety
+        ///
+        /// - `slot` is a valid pointer to uninitialized memory.
+        /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
+        ///   to deallocate.
+        ///
         unsafe fn array<E>(
             self,
             slot: *mut [u8; 1024 * 1024],
@@ -63,11 +57,36 @@ const _: () = {
         ) -> ::core::result::Result<(), E> {
             unsafe { ::pin_init::Init::__init(init, slot) }
         }
+        /// # Safety
+        ///
+        /// `slot` points at the field `array` inside of `Foo`, which is pinned.
         unsafe fn __project_array<'__slot>(
             self,
             slot: &'__slot mut [u8; 1024 * 1024],
         ) -> &'__slot mut [u8; 1024 * 1024] {
             slot
+        }
+        /// # Safety
+        ///
+        /// - `slot` is a valid pointer to uninitialized memory.
+        /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
+        ///   to deallocate.
+        /// - `slot` will not move until it is dropped, i.e. it will be pinned.
+        unsafe fn _pin<E>(
+            self,
+            slot: *mut PhantomPinned,
+            init: impl ::pin_init::PinInit<PhantomPinned, E>,
+        ) -> ::core::result::Result<(), E> {
+            unsafe { ::pin_init::PinInit::__pinned_init(init, slot) }
+        }
+        /// # Safety
+        ///
+        /// `slot` points at the field `_pin` inside of `Foo`, which is pinned.
+        unsafe fn __project__pin<'__slot>(
+            self,
+            slot: &'__slot mut PhantomPinned,
+        ) -> ::core::pin::Pin<&'__slot mut PhantomPinned> {
+            unsafe { ::core::pin::Pin::new_unchecked(slot) }
         }
     }
     unsafe impl ::pin_init::__internal::HasPinData for Foo {
