@@ -6,6 +6,7 @@ struct Foo {
 }
 /// Pin-projections of [`Foo`]
 #[allow(dead_code)]
+#[doc(hidden)]
 struct FooProjection<'__pin> {
     array: &'__pin mut [u8; 1024 * 1024],
     _pin: ::core::pin::Pin<&'__pin mut PhantomPinned>,
@@ -19,6 +20,7 @@ impl Foo {
     ///
     /// These fields are **not** structurally pinned:
     /// - `array`
+    #[inline]
     fn project<'__pin>(
         self: ::core::pin::Pin<&'__pin mut Self>,
     ) -> FooProjection<'__pin> {
@@ -49,7 +51,6 @@ const _: () = {
         /// - `slot` is a valid pointer to uninitialized memory.
         /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
         ///   to deallocate.
-        ///
         unsafe fn array<E>(
             self,
             slot: *mut [u8; 1024 * 1024],
