@@ -1,5 +1,17 @@
 error[E0425]: cannot find value `__data` in this scope
- --> tests/ui/compile-fail/init/data_access.rs:9:21
-  |
-9 |             let _ = __data;
-  |                     ^^^^^^ not found in this scope
+  --> tests/ui/compile-fail/init/data_access.rs:9:21
+   |
+ 9 |             let _ = __data;
+   |                     ^^^^^^ not found in this scope
+   |
+help: an identifier with the same name is defined here, but is not accessible due to macro hygiene
+  --> tests/ui/compile-fail/init/data_access.rs:7:13
+   |
+ 7 |       let _ = pin_init!(Foo {
+   |  _____________^
+ 8 | |         _: {
+ 9 | |             let _ = __data;
+10 | |         },
+11 | |     });
+   | |______^
+   = note: this error originates in the macro `pin_init` (in Nightly builds, run with -Z macro-backtrace for more info)

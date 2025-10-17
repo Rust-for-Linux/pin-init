@@ -15,4 +15,4 @@ help: an identifier with the same name is defined here, but is not accessible du
 12 | |         },
 13 | |     });
    | |______^
-   = note: this error originates in the macro `$crate::__init_internal` which comes from the expansion of the macro `init` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `init` (in Nightly builds, run with -Z macro-backtrace for more info)
