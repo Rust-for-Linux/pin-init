@@ -1,11 +1,10 @@
 error[E0277]: the trait bound `impl PinInit<usize>: Init<usize, _>` is not satisfied
-  --> tests/ui/compile-fail/pin_data/missing_pin.rs:11:9
+  --> tests/ui/compile-fail/pin_data/missing_pin.rs:12:18
    |
-11 | /         pin_init!(Self {
-12 | |             a <- a,
-   | |             - required by a bound introduced by this call
-13 | |         })
-   | |__________^ the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
+12 |             a <- a,
+   |             -    ^ the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
+   |             |
+   |             required by a bound introduced by this call
    |
    = help: the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
            but trait `Init<impl PinInit<usize>, Infallible>` is implemented for it

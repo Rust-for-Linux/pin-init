@@ -317,6 +317,7 @@ fn generate_projections(
     quote! {
         #[doc = #docs]
         #[allow(dead_code)]
+        #[doc(hidden)]
         #vis struct #projection #generics {
             #(#fields_decl)*
             ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut ()>,
@@ -332,6 +333,7 @@ fn generate_projections(
             ///
             /// These fields are **not** structurally pinned:
             #(#not_structurally_pinned_fields_docs)*
+            #[inline]
             #vis fn project<'__pin>(
                 self: ::core::pin::Pin<&'__pin mut Self>,
             ) -> #projection #ty_gen {
@@ -396,7 +398,7 @@ fn generate_the_pin_data(
                 quote!(__init),
                 quote!(&'__slot mut #ty),
                 quote!(slot),
-                quote!(#[doc = ""]),
+                quote!(),
             )
         };
         let slot_safety = format!(
