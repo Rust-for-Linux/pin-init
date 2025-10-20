@@ -13,7 +13,7 @@ struct Bar {
 
 impl Foo {
     fn new() -> impl Init<Self, AllocError> {
-        try_init!(Self {
+        init!(Self {
             a: Box::new(42),
             bar <- init!(Bar { b: 42 }),
         }? AllocError)
