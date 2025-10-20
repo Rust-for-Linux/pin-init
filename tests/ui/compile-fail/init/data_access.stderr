@@ -1,0 +1,5 @@
+error[E0425]: cannot find value `__data` in this scope
+ --> tests/ui/compile-fail/init/data_access.rs:9:21
+  |
+9 |             let _ = __data;
+  |                     ^^^^^^ not found in this scope
