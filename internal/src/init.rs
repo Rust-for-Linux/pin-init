@@ -6,10 +6,11 @@ use syn::{
     parse_quote,
     punctuated::Punctuated,
     spanned::Spanned,
-    token, Block, Expr, ExprCall, ExprPath, Ident, Path, Token, Type,
+    token, Attribute, Block, Expr, ExprCall, ExprPath, Ident, Path, Token, Type,
 };
 
 pub struct Initializer {
+    attrs: Vec<InitializerAttribute>,
     this: Option<This>,
     path: Path,
     brace_token: token::Brace,
@@ -50,23 +51,44 @@ impl InitializerField {
     }
 }
 
+enum InitializerAttribute {
+    DefaultError(DefaultErrorAttribute),
+}
+
+struct DefaultErrorAttribute {
+    ty: Type,
+}
+
 pub(crate) fn expand(
     Initializer {
+        attrs,
         this,
         path,
         brace_token,
         fields,
         rest,
-        mut error,
+        error,
     }: Initializer,
     default_error: Option<&'static str>,
     pinned: bool,
 ) -> TokenStream {
     let mut errors = TokenStream::new();
-    if let Some(default_error) = default_error {
-        error.get_or_insert((Default::default(), syn::parse_str(default_error).unwrap()));
+    let mut error = error.map(|(_, err)| err);
+    if let Some(default_error) = attrs.iter().fold(None, |acc, attr| {
+        #[expect(irrefutable_let_patterns)]
+        if let InitializerAttribute::DefaultError(DefaultErrorAttribute { ty }) = attr {
+            Some(ty.clone())
+        } else {
+            acc
+        }
+    }) {
+        error.get_or_insert(default_error);
     }
-    let error = error.map(|(_, err)| err).unwrap_or_else(|| {
+    if let Some(default_error) = default_error {
+        error.get_or_insert(syn::parse_str(default_error).unwrap());
+    }
+
+    let error = error.unwrap_or_else(|| {
         errors.extend(quote_spanned!(brace_token.span.close()=>
             ::core::compile_error!("expected `? <type>` after `}`");
         ));
@@ -350,6 +372,7 @@ fn make_field_check(
 
 impl Parse for Initializer {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let attrs = input.call(Attribute::parse_outer)?;
         let this = input.peek(Token![&]).then(|| input.parse()).transpose()?;
         let path = input.parse()?;
         let content;
@@ -381,7 +404,19 @@ impl Parse for Initializer {
             .peek(Token![?])
             .then(|| Ok::<_, syn::Error>((input.parse()?, input.parse()?)))
             .transpose()?;
+        let attrs = attrs
+            .into_iter()
+            .map(|a| {
+                if a.path().is_ident("default_error") {
+                    a.parse_args::<DefaultErrorAttribute>()
+                        .map(InitializerAttribute::DefaultError)
+                } else {
+                    Err(syn::Error::new_spanned(a, "unknown initializer attribute"))
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
+            attrs,
             this,
             path,
             brace_token,
@@ -389,6 +424,16 @@ impl Parse for Initializer {
             rest,
             error,
         })
+    }
+}
+
+impl Parse for DefaultErrorAttribute {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let ty = input.parse()?;
+        if !input.peek(End) {
+            return Err(input.error("expected end of input"));
+        }
+        Ok(Self { ty })
     }
 }
 
