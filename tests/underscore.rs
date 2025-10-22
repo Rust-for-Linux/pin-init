@@ -12,6 +12,10 @@ fn bar() -> bool {
     true
 }
 
+fn baz() -> Result<(), ()> {
+    Err(())
+}
+
 impl Foo {
     pub fn new() -> impl Init<Self, ()> {
         try_init!(Self {
@@ -26,6 +30,13 @@ impl Foo {
                     return Err(());
                 }
             }
+        }? ())
+    }
+
+    pub fn create(x: u64) -> impl Init<Self, ()> {
+        try_init!(Self {
+            _: { baz()? },
+            x,
         }? ())
     }
 }
