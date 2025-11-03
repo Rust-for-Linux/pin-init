@@ -5,6 +5,7 @@ struct Foo {
     _pin: PhantomPinned,
 }
 #[doc(hidden)]
+#[allow(dead_code)]
 struct FooProjection<'__pin> {
     _pin: ::core::pin::Pin<&'__pin mut PhantomPinned>,
     array: &'__pin mut [u8; 1024 * 1024],
@@ -56,6 +57,7 @@ const _: () = {
         ) -> ::core::pin::Pin<&'__slot mut PhantomPinned> {
             ::core::pin::Pin::new_unchecked(slot)
         }
+        #[allow(non_snake_case)]
         unsafe fn array<E>(
             self,
             slot: *mut [u8; 1024 * 1024],
@@ -63,6 +65,7 @@ const _: () = {
         ) -> ::core::result::Result<(), E> {
             unsafe { ::pin_init::Init::__init(init, slot) }
         }
+        #[allow(non_snake_case)]
         unsafe fn __project_array<'__slot>(
             self,
             slot: &'__slot mut [u8; 1024 * 1024],

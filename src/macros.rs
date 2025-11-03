@@ -1005,6 +1005,7 @@ macro_rules! __pin_data {
     ) => {
         $crate::macros::paste! {
             #[doc(hidden)]
+            #[allow(dead_code)]
             $vis struct [< $name Projection >] <'__pin, $($decl_generics)*> {
                 $($(#[$($p_attr)*])* $pvis $p_field : ::core::pin::Pin<&'__pin mut $p_type>,)*
                 $($(#[$($attr)*])* $fvis $field : &'__pin mut $type,)*
@@ -1083,6 +1084,7 @@ macro_rules! __pin_data {
                 )*
                 $(
                     $(#[$($attr)*])*
+                    #[allow(non_snake_case)]
                     $fvis unsafe fn $field<E>(
                         self,
                         slot: *mut $type,
@@ -1093,6 +1095,7 @@ macro_rules! __pin_data {
                     }
 
                     $(#[$($attr)*])*
+                    #[allow(non_snake_case)]
                     $fvis unsafe fn [<__project_ $field>]<'__slot>(
                         self,
                         slot: &'__slot mut $type,
