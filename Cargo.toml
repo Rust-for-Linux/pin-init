@@ -32,6 +32,9 @@ libc = "0.2"
 trybuild = { version = "1.0", features = ["diff"] }
 macrotest = "1.0"
 
+# Macro compatibility test
+serde = { version = "1.0", features = ["derive"] }
+
 [lints.rust]
 stable_features = "allow"
 unused_features = "allow"

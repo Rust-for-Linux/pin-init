@@ -85,6 +85,7 @@ dependencies = [
  "macrotest",
  "pin-init-internal",
  "rustc_version",
+ "serde",
  "trybuild",
 ]
 
