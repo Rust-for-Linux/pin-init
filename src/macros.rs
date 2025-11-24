@@ -779,8 +779,9 @@ macro_rules! __pin_data {
         @ty_generics($($ty_generics:tt)*),
         @decl_generics($($decl_generics:tt)*),
         @where($($whr:tt)*),
-        // Some other attribute, just put it into `$accum`.
-        @fields_munch(#[$($attr:tt)*] $($rest:tt)*),
+        // The #[cfg] attributes are kept for those members that are not
+        // removed, so we need to keep them.
+        @fields_munch(#[cfg $($attr:tt)*] $($rest:tt)*),
         @pinned($($pinned:tt)*),
         @not_pinned($($not_pinned:tt)*),
         @fields($($fields:tt)*),
@@ -800,7 +801,41 @@ macro_rules! __pin_data {
             @pinned($($pinned)*),
             @not_pinned($($not_pinned)*),
             @fields($($fields)*),
-            @accum($($accum)* #[$($attr)*]),
+            @accum($($accum)* #[cfg $($attr)*]),
+            @is_pinned($($is_pinned)?),
+            @pinned_drop($($pinned_drop)?),
+        );
+    };
+    (find_pinned_fields:
+        @struct_attrs($($struct_attrs:tt)*),
+        @vis($vis:vis),
+        @name($name:ident),
+        @impl_generics($($impl_generics:tt)*),
+        @ty_generics($($ty_generics:tt)*),
+        @decl_generics($($decl_generics:tt)*),
+        @where($($whr:tt)*),
+        // Some other attribute, just put it into `$fields`
+        @fields_munch(#[$($attr:tt)*] $($rest:tt)*),
+        @pinned($($pinned:tt)*),
+        @not_pinned($($not_pinned:tt)*),
+        @fields($($fields:tt)*),
+        @accum($($accum:tt)*),
+        @is_pinned($($is_pinned:ident)?),
+        @pinned_drop($($pinned_drop:ident)?),
+    ) => {
+        $crate::__pin_data!(find_pinned_fields:
+            @struct_attrs($($struct_attrs)*),
+            @vis($vis),
+            @name($name),
+            @impl_generics($($impl_generics)*),
+            @ty_generics($($ty_generics)*),
+            @decl_generics($($decl_generics)*),
+            @where($($whr)*),
+            @fields_munch($($rest)*),
+            @pinned($($pinned)*),
+            @not_pinned($($not_pinned)*),
+            @fields($($fields)* #[$($attr)*]),
+            @accum($($accum)*),
             @is_pinned($($is_pinned)?),
             @pinned_drop($($pinned_drop)?),
         );
