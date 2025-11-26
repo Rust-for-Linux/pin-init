@@ -1,0 +1,13 @@
+[package]
+name = "test_dummy_only"
+version = "0.0.1"
+edition = "2021"
+
+authors = ["y86-dev"]
+license = "MIT OR Apache-2.0"
+description = "Proc macro only for test reproduction."
+
+publish = false
+
+[lib]
+proc-macro = true

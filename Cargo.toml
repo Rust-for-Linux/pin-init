@@ -32,6 +32,7 @@ trybuild = { version = "1.0", features = ["diff"] }
 macrotest = "1.0"
 # needed for macrotest, have to enable verbatim feature to be able to format `&raw` expressions.
 prettyplease = { version = "0.2", features = ["verbatim"] }
+test_dummy_only = { path = "./test_dummy_only" }
 
 [lints.rust]
 non_ascii_idents = "deny"
