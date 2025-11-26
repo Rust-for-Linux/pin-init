@@ -162,7 +162,7 @@ fn generate_unpin_impl(
         .cloned()
         .collect::<Vec<_>>();
     for field in &mut pinned_fields {
-        field.attrs.retain(|a| !a.path().is_ident("pin"));
+        field.attrs.retain(keep_attr);
     }
     quote! {
         // This struct will be used for the unpin analysis. It is needed, because only structurally
@@ -267,7 +267,7 @@ fn generate_projections(
              ..
          }| {
             let mut attrs = attrs.clone();
-            attrs.retain(|a| !a.path().is_ident("pin"));
+            attrs.retain(keep_attr);
             let mut no_doc_attrs = attrs.clone();
             no_doc_attrs.retain(|a| !a.path().is_ident("doc"));
             let ident = ident
@@ -348,6 +348,16 @@ fn generate_projections(
     }
 }
 
+fn keep_attr(attr: &syn::Attribute) -> bool {
+    let path = attr.path();
+
+    if path.is_ident("pin") {
+        return false;
+    }
+
+    true
+}
+
 fn generate_the_pin_data(
     ItemStruct {
         generics,
@@ -376,7 +386,7 @@ fn generate_the_pin_data(
         pinned: bool,
     ) -> TokenStream {
         let mut attrs = attrs.clone();
-        attrs.retain(|a| !a.path().is_ident("pin"));
+        attrs.retain(keep_attr);
         let ident = ident
             .as_ref()
             .expect("only structs with named fields are supported");
