@@ -355,7 +355,7 @@ fn keep_attr(attr: &syn::Attribute) -> bool {
         return false;
     }
 
-    true
+    path.is_ident("doc") || path.is_ident("cfg")
 }
 
 fn generate_the_pin_data(
