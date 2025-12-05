@@ -1290,7 +1290,7 @@ macro_rules! __init_internal {
         // arbitrary code block
         @munch_fields(_: { $($code:tt)* }, $($rest:tt)*),
     ) => {
-        { $($code)* }
+        $($code)*;
         $crate::__init_internal!(init_slot($($use_data)?):
             @data($data),
             @slot($slot),

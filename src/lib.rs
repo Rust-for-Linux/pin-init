@@ -741,7 +741,8 @@ macro_rules! stack_try_pin_init {
 /// the following modifications is expected:
 /// - Fields that you want to initialize in-place have to use `<-` instead of `:`.
 /// - You can use `_: { /* run any user-code here */ },` anywhere where you can place fields in
-///   order to run arbitrary code.
+///   order to run arbitrary code. Bindings present here will be visible to field initializers that
+///   follow.
 /// - In front of the initializer you can write `&this in` to have access to a [`NonNull<Self>`]
 ///   pointer named `this` inside of the initializer.
 /// - Using struct update syntax one can place `..Zeroable::init_zeroed()` at the very end of the
