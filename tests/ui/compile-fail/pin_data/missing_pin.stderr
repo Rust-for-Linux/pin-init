@@ -7,8 +7,12 @@ error[E0277]: the trait bound `impl PinInit<usize>: Init<usize, _>` is not satis
 13 | |         })
    | |__________^ the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
    |
-   = help: the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
-           but trait `Init<impl PinInit<usize>, Infallible>` is implemented for it
+help: the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
+      but trait `Init<impl PinInit<usize>, Infallible>` is implemented for it
+  --> src/lib.rs
+   |
+   | unsafe impl<T> Init<T> for T {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    = help: for that trait implementation, expected `impl PinInit<usize>`, found `usize`
 note: required by a bound in `__ThePinData::a`
   --> tests/ui/compile-fail/pin_data/missing_pin.rs:4:1
