@@ -1004,6 +1004,7 @@ macro_rules! __pin_data {
         @not_pinned($($(#[$($attr:tt)*])* $fvis:vis $field:ident : $type:ty),* $(,)?),
     ) => {
         $crate::macros::paste! {
+            #[allow(dead_code)]
             #[doc(hidden)]
             $vis struct [< $name Projection >] <'__pin, $($decl_generics)*> {
                 $($(#[$($p_attr)*])* $pvis $p_field : ::core::pin::Pin<&'__pin mut $p_type>,)*
