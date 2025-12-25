@@ -5,5 +5,5 @@ struct Foo {
 }
 
 fn main() {
-    let _ = try_init!(Foo { x: Box::new(0)? }?);
+    let _ = init!(Foo { x: Box::new(0)? }?);
 }

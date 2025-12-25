@@ -1,0 +1,1 @@
+../compile-fail/init/no_field_access.rs
