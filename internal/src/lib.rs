@@ -17,6 +17,7 @@ use crate::diagnostics::DiagCtxt;
 
 mod diagnostics;
 mod init;
+mod member;
 mod pin_data;
 mod pinned_drop;
 mod zeroable;
