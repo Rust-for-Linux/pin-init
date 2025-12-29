@@ -61,6 +61,7 @@ const _: () = {
         /// # Safety
         ///
         /// `slot` points at the field `array` inside of `Foo`, which is pinned.
+        #[allow(non_snake_case)]
         unsafe fn __project_array<'__slot>(
             self,
             slot: &'__slot mut [u8; 1024 * 1024],
@@ -83,6 +84,7 @@ const _: () = {
         /// # Safety
         ///
         /// `slot` points at the field `_pin` inside of `Foo`, which is pinned.
+        #[allow(non_snake_case)]
         unsafe fn __project__pin<'__slot>(
             self,
             slot: &'__slot mut PhantomPinned,

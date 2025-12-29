@@ -14,6 +14,7 @@ use proc_macro::TokenStream;
 use syn::parse_macro_input;
 
 mod init;
+mod member;
 mod pin_data;
 mod pinned_drop;
 mod zeroable;
