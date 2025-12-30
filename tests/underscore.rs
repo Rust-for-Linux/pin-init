@@ -1,4 +1,4 @@
-use pin_init::{try_init, Init};
+use pin_init::{init, Init};
 
 pub struct Foo {
     x: u64,
@@ -12,9 +12,13 @@ fn bar() -> bool {
     true
 }
 
+fn baz() -> Result<(), ()> {
+    Err(())
+}
+
 impl Foo {
     pub fn new() -> impl Init<Self, ()> {
-        try_init!(Self {
+        init!(Self {
             _: {
                 if foo() {
                     return Err(());
@@ -26,6 +30,13 @@ impl Foo {
                     return Err(());
                 }
             }
+        }? ())
+    }
+
+    pub fn create(x: u64) -> impl Init<Self, ()> {
+        init!(Self {
+            _: { baz()? },
+            x,
         }? ())
     }
 }

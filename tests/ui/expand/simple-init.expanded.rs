@@ -3,7 +3,7 @@ struct Foo {}
 fn main() {
     let _ = {
         struct __InitOk;
-        let data = unsafe {
+        let __data = unsafe {
             use ::pin_init::__internal::HasInitData;
             Foo::__init_data()
         };
@@ -12,16 +12,12 @@ fn main() {
             __InitOk,
             ::core::convert::Infallible,
         >(
-            data,
+            __data,
             move |slot| {
                 {
                     struct __InitOk;
                     #[allow(unreachable_code, clippy::diverging_sub_expression)]
-                    let _ = || {
-                        unsafe {
-                            ::core::ptr::write(slot, Foo {});
-                        };
-                    };
+                    let _ = || unsafe { ::core::ptr::write(slot, Foo {}) };
                 }
                 Ok(__InitOk)
             },

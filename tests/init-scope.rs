@@ -17,14 +17,14 @@ impl MyStruct {
     pub fn new() -> impl Init<Self, ()> {
         init_scope(|| {
             let a = foo()?;
-            Ok(try_init!(Self { a, b: 42 }?()))
+            Ok(init!(Self { a, b: 42 }?()))
         })
     }
 
     pub fn new2() -> impl PinInit<Self, ()> {
         pin_init_scope(|| {
             let a = foo()?;
-            Ok(try_pin_init!(Self { a, b: 42 }?()))
+            Ok(pin_init!(Self { a, b: 42 }?()))
         })
     }
 }

@@ -1,0 +1,18 @@
+error[E0425]: cannot find value `__x_guard` in this scope
+  --> tests/ui/compile-fail/init/guard_access.rs:11:21
+   |
+11 |             let _ = __x_guard;
+   |                     ^^^^^^^^^ not found in this scope
+   |
+help: an identifier with the same name is defined here, but is not accessible due to macro hygiene
+  --> tests/ui/compile-fail/init/guard_access.rs:8:13
+   |
+ 8 |       let _ = init!(Foo {
+   |  _____________^
+ 9 | |         x: 0,
+10 | |         _: {
+11 | |             let _ = __x_guard;
+12 | |         },
+13 | |     });
+   | |______^
+   = note: this error originates in the macro `init` (in Nightly builds, run with -Z macro-backtrace for more info)
