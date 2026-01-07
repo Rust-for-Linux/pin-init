@@ -9,4 +9,11 @@ impl Drop for Foo {
     fn drop(&mut self) {}
 }
 
+#[pin_data]
+struct Bar(usize);
+
+impl Drop for Bar {
+    fn drop(&mut self) {}
+}
+
 fn main() {}

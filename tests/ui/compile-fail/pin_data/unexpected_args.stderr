@@ -3,3 +3,9 @@ error: expected `PinnedDrop`
   |
 3 | #[pin_data(Bar)]
   |            ^^^
+
+error: expected `PinnedDrop`
+ --> tests/ui/compile-fail/pin_data/unexpected_args.rs:6:12
+  |
+6 | #[pin_data(Bar)]
+  |            ^^^

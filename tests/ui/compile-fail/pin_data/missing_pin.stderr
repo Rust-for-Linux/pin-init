@@ -1,3 +1,9 @@
+error: expected curly braces
+  --> tests/ui/compile-fail/pin_data/missing_pin.rs:22:23
+   |
+22 |         pin_init!(Self(<- a))
+   |                       ^
+
 error[E0277]: the trait bound `impl PinInit<usize>: Init<usize, _>` is not satisfied
   --> tests/ui/compile-fail/pin_data/missing_pin.rs:12:18
    |
@@ -13,7 +19,7 @@ help: the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
    | unsafe impl<T> Init<T> for T {
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    = help: for that trait implementation, expected `impl PinInit<usize>`, found `usize`
-note: required by a bound in `__ThePinData::a`
+note: required by a bound in `_::__ThePinData::a`
   --> tests/ui/compile-fail/pin_data/missing_pin.rs:4:1
    |
  4 | #[pin_data]

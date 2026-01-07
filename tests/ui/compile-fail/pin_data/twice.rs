@@ -7,4 +7,8 @@ struct Foo {
     a: usize,
 }
 
+#[pin_data]
+#[pin_data]
+struct Bar(#[pin] usize);
+
 fn main() {}
