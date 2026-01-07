@@ -14,4 +14,13 @@ impl Foo {
     }
 }
 
+#[pin_data]
+struct Bar(usize);
+
+impl Bar {
+    fn new(a: impl PinInit<usize>) -> impl PinInit<Self> {
+        pin_init!(Self(<- a))
+    }
+}
+
 fn main() {}

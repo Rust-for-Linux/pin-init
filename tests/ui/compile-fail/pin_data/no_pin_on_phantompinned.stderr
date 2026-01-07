@@ -21,3 +21,11 @@ error: The field `pin4` of type `PhantomPinned` only has an effect if it has the
   |
 9 |     pin4: ::core::marker::PhantomPinned,
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: custom attribute panicked
+  --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:12:1
+   |
+12 | #[pin_data]
+   | ^^^^^^^^^^^
+   |
+   = help: message: called `Option::unwrap()` on a `None` value

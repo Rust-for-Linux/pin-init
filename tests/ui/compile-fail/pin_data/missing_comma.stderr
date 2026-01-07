@@ -4,14 +4,22 @@ error: expected `,`, or `}`, found `b`
 5 |     a: Box<Foo>
   |                ^ help: try adding a comma: `,`
 
+error: expected one of `!`, `)`, `+`, `,`, or `::`, found `Box`
+  --> tests/ui/compile-fail/pin_data/missing_comma.rs:10:21
+   |
+10 | struct Bar(Box<Bar> Box<Bar>);
+   |                    -^^^ expected one of `!`, `)`, `+`, `,`, or `::`
+   |                    |
+   |                    help: missing `,`
+
 error: expected `,`
  --> tests/ui/compile-fail/pin_data/missing_comma.rs:6:5
   |
 6 |     b: Box<Foo>
   |     ^
 
-error[E0601]: `main` function not found in crate `$CRATE`
- --> tests/ui/compile-fail/pin_data/missing_comma.rs:7:2
-  |
-7 | }
-  |  ^ consider adding a `main` function to `$DIR/tests/ui/compile-fail/pin_data/missing_comma.rs`
+error: expected `,`
+  --> tests/ui/compile-fail/pin_data/missing_comma.rs:10:21
+   |
+10 | struct Bar(Box<Bar> Box<Bar>);
+   |                     ^^^

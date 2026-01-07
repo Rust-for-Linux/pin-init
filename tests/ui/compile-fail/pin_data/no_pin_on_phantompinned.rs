@@ -1,5 +1,5 @@
 use pin_init::*;
-// use std::marker::{self, PhantomPinned};
+use std::marker::{self, PhantomPinned};
 
 #[pin_data]
 struct Foo {
@@ -8,5 +8,13 @@ struct Foo {
     pin3: core::marker::PhantomPinned,
     pin4: ::core::marker::PhantomPinned,
 }
+
+#[pin_data]
+struct Bar(
+    PhantomPinned,
+    marker::PhantomPinned,
+    core::marker::PhantomPinned,
+    ::core::marker::PhantomPinned,
+);
 
 fn main() {}

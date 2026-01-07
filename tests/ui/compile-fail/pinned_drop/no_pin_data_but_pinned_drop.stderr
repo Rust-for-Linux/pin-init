@@ -1,10 +1,10 @@
-error[E0277]: the trait bound `Foo: pin_init::__internal::HasPinData` is not satisfied
+error[E0277]: the trait bound `Foo: HasPinData` is not satisfied
  --> tests/ui/compile-fail/pinned_drop/no_pin_data_but_pinned_drop.rs:7:21
   |
 7 | impl PinnedDrop for Foo {
   |                     ^^^ unsatisfied trait bound
   |
-help: the trait `pin_init::__internal::HasPinData` is not implemented for `Foo`
+help: the trait `HasPinData` is not implemented for `Foo`
  --> tests/ui/compile-fail/pinned_drop/no_pin_data_but_pinned_drop.rs:4:1
   |
 4 | struct Foo {}
