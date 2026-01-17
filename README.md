@@ -2,6 +2,9 @@
 
 Safe pinned-initialization in Rust.
 
+This crate is one of the earlier prototypes of the new `pin-init` crate maintained by Rust-for-Linux project.
+Please use https://github.com/Rust-for-Linux/pin-init/ instead.
+
 ## The problem
 
 Rust's `Pin` provides sufficient guarantee for C interop and self-referential
