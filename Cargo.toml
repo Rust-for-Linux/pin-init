@@ -37,6 +37,7 @@ macrotest = "1.0"
 prettyplease = { version = "0.2.37", features = ["verbatim"] }
 
 [lints.rust]
+stable_features = "allow"
 non_ascii_idents = "deny"
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(UI_TESTS)',

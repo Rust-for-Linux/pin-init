@@ -1,4 +1,3 @@
-#![feature(lint_reasons)]
 #![allow(dead_code)]
 use core::{marker::PhantomPinned, pin::Pin};
 use pin_init::*;
