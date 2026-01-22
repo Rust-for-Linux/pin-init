@@ -10,4 +10,4 @@ error[E0046]: not all trait items implemented, missing: `drop`
 7 | impl PinnedDrop for Foo {
   | ^^^^^^^^^^^^^^^^^^^^^^^ missing `drop` in implementation
   |
-  = help: implement the missing item: `fn drop(self: Pin<&mut Self>, _: OnlyCallFromDrop) { todo!() }`
+  = help: implement the missing item: `fn drop(self: Pin<&mut Self>, _: pin_init::__internal::OnlyCallFromDrop) { todo!() }`
