@@ -21,26 +21,3 @@ error: The field `pin4` of type `PhantomPinned` only has an effect if it has the
   |
 9 |     pin4: ::core::marker::PhantomPinned,
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-error[E0425]: cannot find type `PhantomPinned` in this scope
- --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:6:11
-  |
-6 |     pin1: PhantomPinned,
-  |           ^^^^^^^^^^^^^ not found in this scope
-  |
-help: consider importing this struct
-  |
-1 + use std::marker::PhantomPinned;
-  |
-
-error[E0433]: failed to resolve: use of unresolved module or unlinked crate `marker`
- --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:7:11
-  |
-7 |     pin2: marker::PhantomPinned,
-  |           ^^^^^^ use of unresolved module or unlinked crate `marker`
-  |
-  = help: if you wanted to use a crate named `marker`, use `cargo add marker` to add it to your `Cargo.toml`
-help: consider importing this module
-  |
-1 + use std::marker;
-  |
