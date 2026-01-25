@@ -1,8 +1,10 @@
 use std::fmt::Display;
 
+use proc_macro2::Span;
 use quote::{IdentFragment, ToTokens};
-use syn::{Ident, Index};
+use syn::{parse::Parse, Ident, Index};
 
+#[derive(Clone)]
 pub enum Member {
     Named(Ident),
     Unnamed(Index),
@@ -11,6 +13,13 @@ pub enum Member {
 impl Member {
     pub fn new(idx: usize, ident: Option<&Ident>) -> Self {
         ident.cloned().map(Self::Named).unwrap_or(idx.into())
+    }
+
+    pub fn set_span(&mut self, span: Span) {
+        match self {
+            Self::Named(ident) => ident.set_span(span),
+            Self::Unnamed(index) => index.span = span,
+        }
     }
 }
 
@@ -51,5 +60,14 @@ impl Display for Member {
             Self::Named(ident) => write!(f, "{ident}"),
             Self::Unnamed(idx) => write!(f, "{}", idx.index),
         }
+    }
+}
+
+impl Parse for Member {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(match syn::Member::parse(input)? {
+            syn::Member::Named(ident) => Self::Named(ident),
+            syn::Member::Unnamed(index) => Self::Unnamed(index),
+        })
     }
 }

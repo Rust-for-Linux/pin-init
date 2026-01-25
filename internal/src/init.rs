@@ -11,7 +11,10 @@ use syn::{
     token, Attribute, Block, Expr, ExprCall, ExprPath, Ident, Path, Token, Type,
 };
 
-use crate::diagnostics::{DiagCtxt, ErrorGuaranteed};
+use crate::{
+    diagnostics::{DiagCtxt, ErrorGuaranteed},
+    member::Member,
+};
 
 pub(crate) struct Initializer {
     attrs: Vec<InitializerAttribute>,
@@ -36,11 +39,11 @@ struct InitializerField {
 
 enum InitializerKind {
     Value {
-        ident: Ident,
+        member: Member,
         value: Option<(Token![:], Expr)>,
     },
     Init {
-        ident: Ident,
+        member: Member,
         _left_arrow_token: Token![<-],
         value: Expr,
     },
@@ -52,9 +55,9 @@ enum InitializerKind {
 }
 
 impl InitializerKind {
-    fn ident(&self) -> Option<&Ident> {
+    fn member(&self) -> Option<&Member> {
         match self {
-            Self::Value { ident, .. } | Self::Init { ident, .. } => Some(ident),
+            Self::Value { member, .. } | Self::Init { member, .. } => Some(member),
             Self::Code { .. } => None,
         }
     }
@@ -250,7 +253,10 @@ fn init_fields(
             cfgs
         };
         let init = match kind {
-            InitializerKind::Value { ident, value } => {
+            InitializerKind::Value {
+                member: ident,
+                value,
+            } => {
                 let mut value_ident = ident.clone();
                 let value_prep = value.as_ref().map(|value| &value.1).map(|value| {
                     // Setting the span of `value_ident` to `value`'s span improves error messages
@@ -289,7 +295,11 @@ fn init_fields(
                     #accessor
                 }
             }
-            InitializerKind::Init { ident, value, .. } => {
+            InitializerKind::Init {
+                member: ident,
+                value,
+                ..
+            } => {
                 // Again span for better diagnostics
                 let init = format_ident!("init", span = value.span());
                 let (value_init, accessor) = if pinned {
@@ -349,7 +359,7 @@ fn init_fields(
             },
         };
         res.extend(init);
-        if let Some(ident) = kind.ident() {
+        if let Some(ident) = kind.member() {
             // `mixed_site` ensures that the guard is not accessible to the user-controlled code.
             let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
             res.extend(quote! {
@@ -388,8 +398,8 @@ fn make_field_check(
 ) -> TokenStream {
     let field_attrs = fields
         .iter()
-        .filter_map(|f| f.kind.ident().map(|_| &f.attrs));
-    let field_name = fields.iter().filter_map(|f| f.kind.ident());
+        .filter_map(|f| f.kind.member().map(|_| &f.attrs));
+    let field_name = fields.iter().filter_map(|f| f.kind.member());
     match init_kind {
         InitKind::Normal => quote! {
             // We use unreachable code to ensure that all fields have been mentioned exactly once,
@@ -527,17 +537,20 @@ impl Parse for InitializerKind {
             let lh = input.lookahead1();
             if lh.peek(Token![<-]) {
                 Ok(Self::Init {
-                    ident,
+                    member: ident,
                     _left_arrow_token: input.parse()?,
                     value: input.parse()?,
                 })
             } else if lh.peek(Token![:]) {
                 Ok(Self::Value {
-                    ident,
+                    member: ident,
                     value: Some((input.parse()?, input.parse()?)),
                 })
             } else if lh.peek(Token![,]) || lh.peek(End) {
-                Ok(Self::Value { ident, value: None })
+                Ok(Self::Value {
+                    member: ident,
+                    value: None,
+                })
             } else {
                 Err(lh.error())
             }
