@@ -8,7 +8,7 @@ use syn::{
     parse_quote,
     punctuated::Punctuated,
     spanned::Spanned,
-    token, Attribute, Block, Expr, ExprCall, ExprPath, Ident, Path, Token, Type,
+    token, Attribute, Block, Expr, ExprCall, ExprPath, Ident, LitInt, Path, Token, Type,
 };
 
 use crate::{
@@ -448,7 +448,8 @@ impl Parse for Initializer {
             let lh = content.lookahead1();
             if lh.peek(End) || lh.peek(Token![..]) {
                 break;
-            } else if lh.peek(Ident) || lh.peek(Token![_]) || lh.peek(Token![#]) {
+            } else if lh.peek(Ident) || lh.peek(Token![_]) || lh.peek(Token![#]) || lh.peek(LitInt)
+            {
                 fields.push_value(content.parse()?);
                 let lh = content.lookahead1();
                 if lh.peek(End) {
@@ -532,7 +533,7 @@ impl Parse for InitializerKind {
                 _colon_token: input.parse()?,
                 block: input.parse()?,
             })
-        } else if lh.peek(Ident) {
+        } else if lh.peek(Ident) || lh.peek(LitInt) {
             let ident = input.parse()?;
             let lh = input.lookahead1();
             if lh.peek(Token![<-]) {
