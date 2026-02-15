@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 #![cfg_attr(not(RUSTC_LINT_REASONS_IS_STABLE), feature(lint_reasons))]
+#![cfg_attr(not(RUSTC_RAW_REF_OP_IS_STABLE), feature(raw_ref_op))]
 
 use pin_init::*;
 

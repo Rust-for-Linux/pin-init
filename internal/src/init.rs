@@ -284,7 +284,7 @@ fn init_fields(
                     {
                         #value_prep
                         // SAFETY: TODO
-                        unsafe { #write(::core::ptr::addr_of_mut!((*#slot).#ident), #value_ident) };
+                        unsafe { #write(&raw mut (*#slot).#ident, #value_ident) };
                     }
                     #accessor
                 }
@@ -301,7 +301,7 @@ fn init_fields(
                             //   return when an error/panic occurs.
                             // - We also use `#data` to require the correct trait (`Init` or `PinInit`)
                             //   for `#ident`.
-                            unsafe { #data.#ident(::core::ptr::addr_of_mut!((*#slot).#ident), #init)? };
+                            unsafe { #data.#ident(&raw mut (*#slot).#ident, #init)? };
                         },
                         quote! {
                             // SAFETY: TODO
@@ -316,7 +316,7 @@ fn init_fields(
                             unsafe {
                                 ::pin_init::Init::__init(
                                     #init,
-                                    ::core::ptr::addr_of_mut!((*#slot).#ident),
+                                    &raw mut (*#slot).#ident,
                                 )?
                             };
                         },
@@ -361,7 +361,7 @@ fn init_fields(
                 // SAFETY: We forget the guard later when initialization has succeeded.
                 let #guard = unsafe {
                     ::pin_init::__internal::DropGuard::new(
-                        ::core::ptr::addr_of_mut!((*slot).#ident)
+                        &raw mut (*slot).#ident
                     )
                 };
             });
