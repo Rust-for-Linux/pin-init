@@ -68,6 +68,9 @@ fn main() {
         let init = unsafe {
             ::pin_init::init_from_closure::<_, ::core::convert::Infallible>(init)
         };
-        init
+        #[allow(
+            clippy::let_and_return,
+            reason = "some clippy versions warn about the let binding"
+        )] init
     };
 }
