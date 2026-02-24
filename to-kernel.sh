@@ -69,6 +69,7 @@ git am                                              \
     --exclude="rust/pin-init/flake.lock"            \
     --exclude="rust/pin-init/Cargo.toml"            \
     --exclude="rust/pin-init/Cargo.lock"            \
+    --exclude="rust/pin-init/justfile"              \
     --exclude="rust/pin-init/build.rs"              \
     --exclude="rust/pin-init/.clippy.toml"          \
     --exclude="rust/pin-init/.github/*"             \
