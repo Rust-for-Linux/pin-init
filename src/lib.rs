@@ -276,6 +276,8 @@
     all(feature = "unsafe-pinned", CONFIG_RUSTC_HAS_UNSAFE_PINNED),
     feature(unsafe_pinned)
 )]
+#![cfg_attr(all(USE_RUSTC_FEATURES, doc), allow(internal_features))]
+#![cfg_attr(all(USE_RUSTC_FEATURES, doc), feature(rustdoc_internals))]
 
 use core::{
     cell::UnsafeCell,
@@ -1638,9 +1640,15 @@ impl_zeroable! {
 }
 
 macro_rules! impl_tuple_zeroable {
-    ($(,)?) => {};
+    ($first:ident, $(,)?) => {
+        #[cfg_attr(all(USE_RUSTC_FEATURES, doc), doc(fake_variadic))]
+        /// Implemented for tuples up to 10 items long.
+        // SAFETY: All elements are zeroable and padding can be zero.
+        unsafe impl<$first: Zeroable> Zeroable for ($first,) {}
+    };
     ($first:ident, $($t:ident),* $(,)?) => {
         // SAFETY: All elements are zeroable and padding can be zero.
+        #[cfg_attr(doc, doc(hidden))]
         unsafe impl<$first: Zeroable, $($t: Zeroable),*> Zeroable for ($first, $($t),*) {}
         impl_tuple_zeroable!($($t),* ,);
     }
@@ -1654,9 +1662,18 @@ macro_rules! impl_fn_zeroable_option {
         $(impl_fn_zeroable_option!({unsafe extern $abi} $args);)*
     };
     ({$($prefix:tt)*} {$(,)?}) => {};
+    ({$($prefix:tt)*} {$ret:ident, $arg:ident $(,)?}) => {
+        #[cfg_attr(all(USE_RUSTC_FEATURES, doc), doc(fake_variadic))]
+        /// Implemented for function pointers with up to 20 arity.
+        // SAFETY: function pointers are part of the option layout optimization:
+        // <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
+        unsafe impl<$ret, $arg> ZeroableOption for $($prefix)* fn($arg) -> $ret {}
+        impl_fn_zeroable_option!({$($prefix)*} {$arg,});
+    };
     ({$($prefix:tt)*} {$ret:ident, $($rest:ident),* $(,)?}) => {
         // SAFETY: function pointers are part of the option layout optimization:
         // <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
+        #[cfg_attr(doc, doc(hidden))]
         unsafe impl<$ret, $($rest),*> ZeroableOption for $($prefix)* fn($($rest),*) -> $ret {}
         impl_fn_zeroable_option!({$($prefix)*} {$($rest),*,});
     };
