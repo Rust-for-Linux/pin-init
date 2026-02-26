@@ -21,4 +21,5 @@ syn = { version = "2.0.86", features = ["full", "parsing", "visit-mut"] }
 rustc_version = "0.4"
 
 [lints.rust]
+stable_features = "allow"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kernel)'] }
