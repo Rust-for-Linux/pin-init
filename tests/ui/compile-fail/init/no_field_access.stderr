@@ -1,5 +1,0 @@
-error[E0425]: cannot find value `c` in this scope
-  --> tests/ui/compile-fail/init/no_field_access.rs:15:17
-   |
-15 |             b: *c,
-   |                 ^ not found in this scope
