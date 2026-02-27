@@ -27,7 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `[pin_]init!` now supports attributes on fields (such as `#[cfg(...)]`).
 - Add a `#[default_error(<type>)]` attribute to `[pin_]init!` to override the
   default error (when no `? Error` is specified).
-- Support packed struct in `[pin_]init!` with `#[disable_initialized_field_access]`.
 
 ### Removed
 
