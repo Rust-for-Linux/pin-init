@@ -257,6 +257,11 @@ fn init_fields(
                 });
                 // Again span for better diagnostics
                 let write = quote_spanned!(ident.span()=> ::core::ptr::write);
+                // NOTE: the field accessor ensures that the initialized struct is not
+                // `repr(packed)`. If it were, the compiler would emit E0793. We do not support
+                // packed structs, since `Init::__init` requires an aligned pointer; the same
+                // requirement that the call to `ptr::write` below has.
+                // For more info see <https://github.com/Rust-for-Linux/pin-init/issues/112>
                 let accessor = if pinned {
                     let project_ident = format_ident!("__project_{ident}");
                     quote! {
@@ -284,6 +289,11 @@ fn init_fields(
             InitializerKind::Init { ident, value, .. } => {
                 // Again span for better diagnostics
                 let init = format_ident!("init", span = value.span());
+                // NOTE: the field accessor ensures that the initialized struct is not
+                // `repr(packed)`. If it were, the compiler would emit E0793. We do not support
+                // packed structs, since `Init::__init` requires an aligned pointer; the same
+                // requirement that the call to `ptr::write` below has.
+                // For more info see <https://github.com/Rust-for-Linux/pin-init/issues/112>
                 let (value_init, accessor) = if pinned {
                     let project_ident = format_ident!("__project_{ident}");
                     (
