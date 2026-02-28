@@ -8,7 +8,8 @@ use syn::{
     parse_quote,
     punctuated::Punctuated,
     spanned::Spanned,
-    token, Attribute, Block, Expr, ExprCall, ExprPath, Ident, Path, Token, Type,
+    token, Attribute, Block, Expr, ExprCall, ExprPath, Ident, Index, LitInt, Member, Path, Token,
+    Type,
 };
 
 use crate::diagnostics::{DiagCtxt, ErrorGuaranteed};
@@ -36,11 +37,11 @@ struct InitializerField {
 
 enum InitializerKind {
     Value {
-        ident: Ident,
+        member: Member,
         value: Option<(Token![:], Expr)>,
     },
     Init {
-        ident: Ident,
+        member: Member,
         _left_arrow_token: Token![<-],
         value: Expr,
     },
@@ -52,11 +53,25 @@ enum InitializerKind {
 }
 
 impl InitializerKind {
-    fn ident(&self) -> Option<&Ident> {
+    fn member(&self) -> Option<&Member> {
         match self {
-            Self::Value { ident, .. } | Self::Init { ident, .. } => Some(ident),
+            Self::Value { member, .. } | Self::Init { member, .. } => Some(member),
             Self::Code { .. } => None,
         }
+    }
+}
+
+fn member_helper_ident(member: &Member) -> Ident {
+    match member {
+        Member::Named(ident) => ident.clone(),
+        Member::Unnamed(Index { index, .. }) => format_ident!("_{index}"),
+    }
+}
+
+fn member_project_ident(member: &Member) -> Ident {
+    match member {
+        Member::Named(ident) => format_ident!("__project_{ident}"),
+        Member::Unnamed(Index { index, .. }) => format_ident!("__project_{index}"),
     }
 }
 
@@ -256,8 +271,8 @@ fn init_fields(
             cfgs
         };
         let init = match kind {
-            InitializerKind::Value { ident, value } => {
-                let mut value_ident = ident.clone();
+            InitializerKind::Value { member, value } => {
+                let mut value_ident = member_helper_ident(member);
                 let value_prep = value.as_ref().map(|value| &value.1).map(|value| {
                     // Setting the span of `value_ident` to `value`'s span improves error messages
                     // when the type of `value` is wrong.
@@ -265,53 +280,61 @@ fn init_fields(
                     quote!(let #value_ident = #value;)
                 });
                 // Again span for better diagnostics
-                let write = quote_spanned!(ident.span()=> ::core::ptr::write);
+                let write = quote_spanned!(member.span()=> ::core::ptr::write);
                 let accessor = if pinned {
-                    let project_ident = format_ident!("__project_{ident}");
+                    let project_ident = member_project_ident(member);
                     quote! {
                         // SAFETY: TODO
-                        unsafe { #data.#project_ident(&mut (*#slot).#ident) }
+                        unsafe { #data.#project_ident(&mut (*#slot).#member) }
                     }
                 } else {
                     quote! {
                         // SAFETY: TODO
-                        unsafe { &mut (*#slot).#ident }
+                        unsafe { &mut (*#slot).#member }
                     }
                 };
-                let accessor = generate_initialized_accessors.then(|| {
-                    quote! {
-                        #(#cfgs)*
-                        #[allow(unused_variables)]
-                        let #ident = #accessor;
-                    }
-                });
+                let member_local = match member {
+                    Member::Named(ident) => Some(ident),
+                    Member::Unnamed(_) => None,
+                };
+                let accessor =
+                    (generate_initialized_accessors && member_local.is_some()).then(|| {
+                        let ident = member_local.expect("checked above");
+                        quote! {
+                            #(#cfgs)*
+                            #[allow(unused_variables)]
+                            let #ident = #accessor;
+                        }
+                    });
                 quote! {
                     #(#attrs)*
                     {
                         #value_prep
                         // SAFETY: TODO
-                        unsafe { #write(::core::ptr::addr_of_mut!((*#slot).#ident), #value_ident) };
+                        unsafe { #write(::core::ptr::addr_of_mut!((*#slot).#member), #value_ident) };
                     }
                     #accessor
                 }
             }
-            InitializerKind::Init { ident, value, .. } => {
+            InitializerKind::Init { member, value, .. } => {
                 // Again span for better diagnostics
                 let init = format_ident!("init", span = value.span());
                 let (value_init, accessor) = if pinned {
-                    let project_ident = format_ident!("__project_{ident}");
+                    let project_ident = member_project_ident(member);
+                    let member_ident = member_helper_ident(member);
                     (
                         quote! {
                             // SAFETY:
                             // - `slot` is valid, because we are inside of an initializer closure, we
                             //   return when an error/panic occurs.
-                            // - We also use `#data` to require the correct trait (`Init` or `PinInit`)
-                            //   for `#ident`.
-                            unsafe { #data.#ident(::core::ptr::addr_of_mut!((*#slot).#ident), #init)? };
+                            // - We also use `#data` to require the correct trait (`Init` or `PinInit`).
+                            unsafe {
+                                #data.#member_ident(::core::ptr::addr_of_mut!((*#slot).#member), #init)?
+                            };
                         },
                         quote! {
                             // SAFETY: TODO
-                            unsafe { #data.#project_ident(&mut (*#slot).#ident) }
+                            unsafe { #data.#project_ident(&mut (*#slot).#member) }
                         },
                     )
                 } else {
@@ -322,23 +345,29 @@ fn init_fields(
                             unsafe {
                                 ::pin_init::Init::__init(
                                     #init,
-                                    ::core::ptr::addr_of_mut!((*#slot).#ident),
+                                    ::core::ptr::addr_of_mut!((*#slot).#member),
                                 )?
                             };
                         },
                         quote! {
                             // SAFETY: TODO
-                            unsafe { &mut (*#slot).#ident }
+                            unsafe { &mut (*#slot).#member }
                         },
                     )
                 };
-                let accessor = generate_initialized_accessors.then(|| {
-                    quote! {
-                        #(#cfgs)*
-                        #[allow(unused_variables)]
-                        let #ident = #accessor;
-                    }
-                });
+                let member_local = match member {
+                    Member::Named(ident) => Some(ident),
+                    Member::Unnamed(_) => None,
+                };
+                let accessor =
+                    (generate_initialized_accessors && member_local.is_some()).then(|| {
+                        let ident = member_local.expect("checked above");
+                        quote! {
+                            #(#cfgs)*
+                            #[allow(unused_variables)]
+                            let #ident = #accessor;
+                        }
+                    });
                 quote! {
                     #(#attrs)*
                     {
@@ -355,9 +384,10 @@ fn init_fields(
             },
         };
         res.extend(init);
-        if let Some(ident) = kind.ident() {
+        if let Some(member) = kind.member() {
             // `mixed_site` ensures that the guard is not accessible to the user-controlled code.
-            let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
+            let member_for_guard = member_helper_ident(member);
+            let guard = format_ident!("__{member_for_guard}_guard", span = Span::mixed_site());
             res.extend(quote! {
                 #(#cfgs)*
                 // Create the drop guard:
@@ -367,7 +397,7 @@ fn init_fields(
                 // SAFETY: We forget the guard later when initialization has succeeded.
                 let #guard = unsafe {
                     ::pin_init::__internal::DropGuard::new(
-                        ::core::ptr::addr_of_mut!((*slot).#ident)
+                        ::core::ptr::addr_of_mut!((*slot).#member)
                     )
                 };
             });
@@ -394,8 +424,8 @@ fn make_field_check(
 ) -> TokenStream {
     let field_attrs = fields
         .iter()
-        .filter_map(|f| f.kind.ident().map(|_| &f.attrs));
-    let field_name = fields.iter().filter_map(|f| f.kind.ident());
+        .filter_map(|f| f.kind.member().map(|_| &f.attrs));
+    let field_name = fields.iter().filter_map(|f| f.kind.member());
     match init_kind {
         InitKind::Normal => quote! {
             // We use unreachable code to ensure that all fields have been mentioned exactly once,
@@ -444,7 +474,8 @@ impl Parse for Initializer {
             let lh = content.lookahead1();
             if lh.peek(End) || lh.peek(Token![..]) {
                 break;
-            } else if lh.peek(Ident) || lh.peek(Token![_]) || lh.peek(Token![#]) {
+            } else if lh.peek(Ident) || lh.peek(LitInt) || lh.peek(Token![_]) || lh.peek(Token![#])
+            {
                 fields.push_value(content.parse()?);
                 let lh = content.lookahead1();
                 if lh.peek(End) {
@@ -528,22 +559,46 @@ impl Parse for InitializerKind {
                 _colon_token: input.parse()?,
                 block: input.parse()?,
             })
-        } else if lh.peek(Ident) {
-            let ident = input.parse()?;
+        } else if lh.peek(Ident) || lh.peek(LitInt) {
+            let member = if lh.peek(Ident) {
+                Member::Named(input.parse()?)
+            } else {
+                let lit: LitInt = input.parse()?;
+                let index: u32 = lit.base10_parse().map_err(|_| {
+                    syn::Error::new(
+                        lit.span(),
+                        "tuple field index must be a non-negative integer",
+                    )
+                })?;
+                Member::Unnamed(Index {
+                    index,
+                    span: lit.span(),
+                })
+            };
             let lh = input.lookahead1();
             if lh.peek(Token![<-]) {
                 Ok(Self::Init {
-                    ident,
+                    member,
                     _left_arrow_token: input.parse()?,
                     value: input.parse()?,
                 })
             } else if lh.peek(Token![:]) {
                 Ok(Self::Value {
-                    ident,
+                    member,
                     value: Some((input.parse()?, input.parse()?)),
                 })
             } else if lh.peek(Token![,]) || lh.peek(End) {
-                Ok(Self::Value { ident, value: None })
+                if matches!(member, Member::Unnamed(_)) {
+                    Err(syn::Error::new(
+                        input.span(),
+                        "tuple fields require `:` or `<-` (shorthand is only available for named fields)",
+                    ))
+                } else {
+                    Ok(Self::Value {
+                        member,
+                        value: None,
+                    })
+                }
             } else {
                 Err(lh.error())
             }
