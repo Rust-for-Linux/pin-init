@@ -2,16 +2,33 @@
 
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
+use std::collections::HashSet;
 use syn::{
     braced,
     parse::{End, Parse},
     parse_quote,
     punctuated::Punctuated,
     spanned::Spanned,
-    token, Attribute, Block, Expr, ExprCall, ExprPath, Ident, Path, Token, Type,
+    token,
+    visit::{self, Visit},
+    Attribute, Block, Expr, ExprCall, ExprPath, Ident, Path, Token, Type,
 };
 
 use crate::diagnostics::{DiagCtxt, ErrorGuaranteed};
+
+struct AccessorScanner<'a> {
+    field_names: HashSet<&'a Ident>,
+    used_fields: HashSet<Ident>,
+}
+
+impl<'a> Visit<'_> for AccessorScanner<'a> {
+    fn visit_ident(&mut self, i: &Ident) {
+        if self.field_names.contains(i) {
+            self.used_fields.insert(i.clone());
+        }
+        visit::visit_ident(self, i);
+    }
+}
 
 pub(crate) struct Initializer {
     attrs: Vec<InitializerAttribute>,
@@ -145,6 +162,27 @@ pub(crate) fn expand(
     };
     // `mixed_site` ensures that the data is not accessible to the user-controlled code.
     let data = Ident::new("__data", Span::mixed_site());
+    let mut field_names = HashSet::new();
+    for field in &fields {
+        if let Some(ident) = field.kind.ident() {
+            field_names.insert(ident);
+        }
+    }
+    let mut scanner = AccessorScanner {
+        field_names,
+        used_fields: HashSet::new(),
+    };
+    for field in &fields {
+        match &field.kind {
+            InitializerKind::Value {
+                value: Some((_, expr)),
+                ..
+            } => scanner.visit_expr(expr),
+            InitializerKind::Init { value, .. } => scanner.visit_expr(value),
+            InitializerKind::Code { block, .. } => scanner.visit_block(block),
+            _ => {}
+        }
+    }
     let init_fields = init_fields(
         &fields,
         pinned,
@@ -153,6 +191,7 @@ pub(crate) fn expand(
             .any(|attr| matches!(attr, InitializerAttribute::DisableInitializedFieldAccess)),
         &data,
         &slot,
+        &scanner.used_fields,
     );
     let field_check = make_field_check(&fields, init_kind, &path);
     Ok(quote! {{
@@ -245,6 +284,7 @@ fn init_fields(
     generate_initialized_accessors: bool,
     data: &Ident,
     slot: &Ident,
+    used_fields: &HashSet<Ident>,
 ) -> TokenStream {
     let mut guards = vec![];
     let mut guard_attrs = vec![];
@@ -278,13 +318,14 @@ fn init_fields(
                         unsafe { &mut (*#slot).#ident }
                     }
                 };
-                let accessor = generate_initialized_accessors.then(|| {
-                    quote! {
-                        #(#cfgs)*
-                        #[allow(unused_variables)]
-                        let #ident = #accessor;
-                    }
-                });
+                let accessor = (generate_initialized_accessors && used_fields.contains(ident))
+                    .then(|| {
+                        quote! {
+                                #(#cfgs)*
+                                #[allow(unused_variables)]
+                                let #ident = #accessor;
+                        }
+                    });
                 quote! {
                     #(#attrs)*
                     {
@@ -332,13 +373,14 @@ fn init_fields(
                         },
                     )
                 };
-                let accessor = generate_initialized_accessors.then(|| {
-                    quote! {
-                        #(#cfgs)*
-                        #[allow(unused_variables)]
-                        let #ident = #accessor;
-                    }
-                });
+                let accessor = (generate_initialized_accessors && used_fields.contains(ident))
+                    .then(|| {
+                        quote! {
+                                #(#cfgs)*
+                                #[allow(unused_variables)]
+                                let #ident = #accessor;
+                        }
+                    });
                 quote! {
                     #(#attrs)*
                     {

@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Automatically scan the initializer body in `[pin_]init!` to conditionally generate field
+  accessors; this reduces stack bloat and prevents alignment errors on packed structs by
+  only creating references when a field is actually used.
 - `#[pin_data]` now generates a `*Projection` struct similar to the `pin-project` crate.
 - Add initializer code blocks to `[try_][pin_]init!` macros: make initializer
   macros accept any number of `_: {/* arbitrary code */},` & make them run the
@@ -22,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make the `[try_][pin_]init!` macros expose initialized fields via a `let`
   binding as `&mut T` or `Pin<&mut T>` for later fields.
 - Rewrote all proc-macros (`[pin_]init!`, `#[pin_data]`, `#[pinned_drop]`,
-  `derive([Maybe]Zeroable)`),  using `syn` with better diagnostics.
+  `derive([Maybe]Zeroable)`), using `syn` with better diagnostics.
 - `derive([Maybe]Zeroable)` now support tuple structs.
 - `[pin_]init!` now supports attributes on fields (such as `#[cfg(...)]`).
 - Add a `#[default_error(<type>)]` attribute to `[pin_]init!` to override the
