@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `#[pin_data]` and `{pin_}init!` now support tuple structs.
+    e.g. `Foo(a, b, c)` and brace syntax e.g. `Foo{0 : a, 1 <- b, 2: c}`.
 - `[pin_]init_scope` functions to run arbitrary code inside of an initializer.
 - `&'static mut MaybeUninit<T>` now implements `InPlaceWrite`. This enables users to use external
   allocation mechanisms such as `static_cell`.
