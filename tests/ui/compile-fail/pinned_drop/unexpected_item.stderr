@@ -1,8 +1,8 @@
-error[E0438]: const `BAZ` is not a member of trait `pin_init::PinnedDrop`
+error[E0438]: const `BAZ` is not a member of trait `::pin_init::PinnedDrop`
  --> tests/ui/compile-fail/pinned_drop/unexpected_item.rs:8:5
   |
 8 |     const BAZ: usize = 0;
-  |     ^^^^^^^^^^^^^^^^^^^^^ not a member of trait `pin_init::PinnedDrop`
+  |     ^^^^^^^^^^^^^^^^^^^^^ not a member of trait `::pin_init::PinnedDrop`
 
 error[E0046]: not all trait items implemented, missing: `drop`
  --> tests/ui/compile-fail/pinned_drop/unexpected_item.rs:7:1
