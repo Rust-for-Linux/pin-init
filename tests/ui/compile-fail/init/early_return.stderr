@@ -1,0 +1,36 @@
+error[E0308]: mismatched types
+  --> tests/ui/compile-fail/init/early_return.rs:10:23
+   |
+10 |             return Ok(());
+   |                    -- ^^ expected `InitOk`, found `()`
+   |                    |
+   |                    arguments to this enum variant are incorrect
+   |
+help: the type constructed contains `()` due to the type of the argument passed
+  --> tests/ui/compile-fail/init/early_return.rs:10:20
+   |
+10 |             return Ok(());
+   |                    ^^^--^
+   |                       |
+   |                       this argument influences the type of `Ok`
+note: tuple variant defined here
+  --> $RUST/core/src/result.rs
+   |
+   |     Ok(#[stable(feature = "rust1", since = "1.0.0")] T),
+   |     ^^
+
+warning: unreachable statement
+  --> tests/ui/compile-fail/init/early_return.rs:8:13
+   |
+ 8 |       let _ = init!(Foo {
+   |  _____________^
+ 9 | |         _: {
+10 | |             return Ok(());
+   | |             ------------- any code following this expression is unreachable
+11 | |         },
+12 | |         a: 42,
+13 | |     });
+   | |______^ unreachable statement
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+   = note: this warning originates in the macro `init` (in Nightly builds, run with -Z macro-backtrace for more info)
