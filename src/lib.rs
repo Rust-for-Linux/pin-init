@@ -1639,16 +1639,6 @@ pub unsafe trait ZeroableOption {}
 // SAFETY: by the safety requirement of `ZeroableOption`, this is valid.
 unsafe impl<T: ZeroableOption> Zeroable for Option<T> {}
 
-// SAFETY: `Option<&T>` is part of the option layout optimization guarantee:
-// <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
-unsafe impl<T> ZeroableOption for &T {}
-// SAFETY: `Option<&mut T>` is part of the option layout optimization guarantee:
-// <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
-unsafe impl<T> ZeroableOption for &mut T {}
-// SAFETY: `Option<NonNull<T>>` is part of the option layout optimization guarantee:
-// <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
-unsafe impl<T> ZeroableOption for NonNull<T> {}
-
 macro_rules! impl_fn_zeroable_option {
     ([$($abi:literal),* $(,)?] $args:tt) => {
         $(impl_fn_zeroable_option!({extern $abi} $args);)*
@@ -1675,13 +1665,22 @@ macro_rules! impl_fn_zeroable_option {
 impl_fn_zeroable_option!(["Rust", "C"] { A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U });
 
 macro_rules! impl_zeroable_option {
-    ($($int:ty),* $(,)?) => {
-        // SAFETY: Safety comment written in the macro invocation.
-        $(unsafe impl ZeroableOption for $int {})*
+    ($($({$($generics:tt)*})? $t:ty, )*) => {
+        // SAFETY: Safety comments written in the macro invocation.
+        $(unsafe impl$($($generics)*)? ZeroableOption for $t {})*
     };
 }
 
 impl_zeroable_option! {
+    // SAFETY: `Option<&T>` is part of the option layout optimization guarantee:
+    // <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
+    {<T: ?Sized>} &T,
+    // SAFETY: `Option<&mut T>` is part of the option layout optimization guarantee:
+    // <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
+    {<T: ?Sized>} &mut T,
+    // SAFETY: `Option<NonNull<T>>` is part of the option layout optimization guarantee:
+    // <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
+    {<T: ?Sized>} NonNull<T>,
     // SAFETY: All zeros is equivalent to `None` (option layout optimization guarantee:
     // <https://doc.rust-lang.org/stable/std/option/index.html#representation>).
     NonZeroU8, NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU128, NonZeroUsize,
