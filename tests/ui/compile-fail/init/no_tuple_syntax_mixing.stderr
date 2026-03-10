@@ -1,0 +1,5 @@
+error: expected `,`
+ --> tests/ui/compile-fail/init/no_tuple_syntax_mixing.rs:7:34
+  |
+7 |     let _ = pin_init!(Tuple (0, 1: 24));
+  |                                  ^
