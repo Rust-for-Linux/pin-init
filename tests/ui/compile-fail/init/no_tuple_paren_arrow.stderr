@@ -1,0 +1,5 @@
+error: `<-` is not supported in tuple constructor syntax; use braces with indices, e.g. `Type { 0 <- init, 1: value }`
+ --> tests/ui/compile-fail/init/no_tuple_paren_arrow.rs:7:29
+  |
+7 |     let _ = pin_init!(Tuple(<- 1, 2));
+  |                             ^

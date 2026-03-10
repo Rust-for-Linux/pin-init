@@ -1,0 +1,5 @@
+error: The field index `1` of type `PhantomPinned` only has an effect if it has the `#[pin]` attribute
+ --> tests/ui/compile-fail/pin_data/tuple_struct_missing_pin_phantom.rs:4:20
+  |
+4 | struct Tuple<T>(T, core::marker::PhantomPinned);
+  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
