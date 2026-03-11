@@ -85,7 +85,10 @@ pub(crate) fn pin_data(
         .map(|field| {
             let len = field.attrs.len();
             field.attrs.retain(|a| !a.path().is_ident("pin"));
-            let pinned = len != field.attrs.len();
+            let pinned_count = len - field.attrs.len();
+            if pinned_count > 1 {
+                dcx.error(&field, "#[pin] attribute specified more than once");
+            }
 
             let cfg_attrs = field
                 .attrs
@@ -95,7 +98,7 @@ pub(crate) fn pin_data(
 
             FieldInfo {
                 field: &*field,
-                pinned,
+                pinned: pinned_count != 0,
                 cfg_attrs,
             }
         })
