@@ -15,13 +15,10 @@ where
 /// Pin-projections of [`Foo`]
 #[allow(dead_code)]
 #[doc(hidden)]
-struct FooProjection<
-    '__pin,
-    'a,
-    'b: 'a,
-    T: Bar<'b> + ?Sized + 'a,
-    const SIZE: usize = 0,
-> {
+struct FooProjection<'__pin, 'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
+where
+    T: Bar<'a, 1>,
+{
     array: &'__pin mut [u8; 1024 * 1024],
     r: &'__pin mut &'b mut [&'a mut T; SIZE],
     _pin: ::core::pin::Pin<&'__pin mut PhantomPinned>,
