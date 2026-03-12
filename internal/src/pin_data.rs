@@ -81,7 +81,7 @@ pub(crate) fn pin_data(
             field.attrs.retain(|a| !a.path().is_ident("pin"));
             let diff = len - field.attrs.len();
             if diff > 1 {
-                return Err(dcx.error(field, "#[pin] attribute set twice"));
+                return Err(dcx.error(field, "#[pin] attribute specified more than once"));
             }
             Ok((diff > 0, &*field))
         })

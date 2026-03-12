@@ -1,4 +1,4 @@
-error: #[pin] attribute set twice
+error: #[pin] attribute specified more than once
  --> tests/ui/compile-fail/pin_data/twice_pin.rs:7:5
   |
 7 |     a: usize,
