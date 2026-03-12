@@ -1,0 +1,19 @@
+error: comparison operators cannot be chained
+ --> tests/ui/compile-fail/init/tuple_wrong_generics.rs:6:22
+  |
+6 |     let _ = init!(Foo<()> {
+  |                      ^  ^
+  |
+help: use `::<...>` instead of `<...>` to specify lifetime, type, or const arguments
+  |
+6 |     let _ = init!(Foo::<()> {
+  |                      ++
+
+error: comparison operators cannot be chained
+ --> tests/ui/compile-fail/init/tuple_wrong_generics.rs:6:22
+  |
+6 |     let _ = init!(Foo<()> {
+  |                      ^  ^
+  |
+  = help: use `::<...>` instead of `<...>` to specify lifetime, type, or const arguments
+  = help: or use `(...)` if you meant to specify fn arguments

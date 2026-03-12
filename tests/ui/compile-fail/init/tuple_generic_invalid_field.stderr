@@ -1,0 +1,33 @@
+error[E0609]: no field `2` on type `Tuple<u8, 3>`
+ --> tests/ui/compile-fail/init/tuple_generic_invalid_field.rs:7:60
+  |
+7 |     let _ = pin_init!(Tuple::<u8, 3> { 0: [1, 2, 3], 1: 2, 2: 3 });
+  |                                                            ^ unknown field
+  |
+  = note: available fields are: `0`, `1`
+
+error[E0599]: no method named `__project_2` found for struct `__ThePinData<T, N>` in the current scope
+ --> tests/ui/compile-fail/init/tuple_generic_invalid_field.rs:7:13
+  |
+3 | #[pin_data]
+  | ----------- method `__project_2` not found for this struct
+...
+7 |     let _ = pin_init!(Tuple::<u8, 3> { 0: [1, 2, 3], 1: 2, 2: 3 });
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `pin_init` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0560]: struct `Tuple<u8, 3>` has no field named `2`
+ --> tests/ui/compile-fail/init/tuple_generic_invalid_field.rs:7:60
+  |
+4 | struct Tuple<T, const N: usize>(#[pin] [T; N], i32);
+  |        ----- `Tuple<u8, 3>` defined here
+...
+7 |     let _ = pin_init!(Tuple::<u8, 3> { 0: [1, 2, 3], 1: 2, 2: 3 });
+  |                                                            ^ field does not exist
+  |
+help: `Tuple<u8, 3>` is a tuple struct, use the appropriate syntax
+  |
+7 -     let _ = pin_init!(Tuple::<u8, 3> { 0: [1, 2, 3], 1: 2, 2: 3 });
+7 +     let _ = Tuple<u8, 3>(/* [T; N] */, /* i32 */);
+  |
