@@ -79,9 +79,13 @@ pub(crate) fn pin_data(
         .map(|field| {
             let len = field.attrs.len();
             field.attrs.retain(|a| !a.path().is_ident("pin"));
-            (len != field.attrs.len(), &*field)
+            let diff = len - field.attrs.len();
+            if diff > 1 {
+                return Err(dcx.error(field, "#[pin] attribute specified more than once"));
+            }
+            Ok((diff > 0, &*field))
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
 
     for (pinned, field) in &fields {
         if !pinned && is_phantom_pinned(&field.ty) {
