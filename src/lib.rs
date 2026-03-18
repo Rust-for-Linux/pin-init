@@ -1640,8 +1640,8 @@ macro_rules! impl_tuple_zeroable {
         unsafe impl<$first: Zeroable> Zeroable for ($first,) {}
     };
     ($first:ident, $($t:ident),* $(,)?) => {
-        // SAFETY: All elements are zeroable and padding can be zero.
         #[cfg_attr(doc, doc(hidden))]
+        // SAFETY: All elements are zeroable and padding can be zero.
         unsafe impl<$first: Zeroable, $($t: Zeroable),*> Zeroable for ($first, $($t),*) {}
         impl_tuple_zeroable!($($t),* ,);
     }
@@ -1664,9 +1664,9 @@ macro_rules! impl_fn_zeroable_option {
         impl_fn_zeroable_option!({$($prefix)*} {$arg,});
     };
     ({$($prefix:tt)*} {$ret:ident, $($rest:ident),* $(,)?}) => {
+        #[cfg_attr(doc, doc(hidden))]
         // SAFETY: function pointers are part of the option layout optimization:
         // <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
-        #[cfg_attr(doc, doc(hidden))]
         unsafe impl<$ret, $($rest),*> ZeroableOption for $($prefix)* fn($($rest),*) -> $ret {}
         impl_fn_zeroable_option!({$($prefix)*} {$($rest),*,});
     };
