@@ -6,7 +6,7 @@ fn main() {
 
     let meta = version_meta().unwrap();
 
-    let use_feature = meta.channel == Channel::Nightly || std::env::var("RUSTC_BOOTSTRAP").is_ok();
+    let use_feature = meta.channel == Channel::Nightly || option_env!("RUSTC_BOOTSTRAP").is_some();
     if use_feature {
         // Use this cfg option to control whether we should enable features that are already stable
         // in some new Rust versions, but are available as unstable features in older Rust versions
