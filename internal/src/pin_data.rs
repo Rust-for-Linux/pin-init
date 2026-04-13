@@ -7,7 +7,7 @@ use syn::{
     parse_quote, parse_quote_spanned,
     spanned::Spanned,
     visit_mut::VisitMut,
-    Field, Generics, Ident, Item, PathSegment, Type, TypePath, Visibility, WhereClause,
+    Attribute, Field, Generics, Ident, Item, PathSegment, Type, TypePath, Visibility, WhereClause,
 };
 
 use crate::diagnostics::{DiagCtxt, ErrorGuaranteed};
@@ -33,6 +33,11 @@ impl Parse for Args {
             Err(lh.error())
         }
     }
+}
+
+fn keep_attr(a: &Attribute) -> bool {
+    let p = a.path();
+    ["cfg", "doc"].iter().any(|a| p.is_ident(a))
 }
 
 pub(crate) fn pin_data(
@@ -77,9 +82,9 @@ pub(crate) fn pin_data(
         .fields
         .iter_mut()
         .map(|field| {
-            let len = field.attrs.len();
-            field.attrs.retain(|a| !a.path().is_ident("pin"));
-            (len != field.attrs.len(), &*field)
+            let pinned = field.attrs.iter().any(|a| a.path().is_ident("pin"));
+            field.attrs.retain(keep_attr);
+            (pinned, &*field)
         })
         .collect();
 
@@ -259,7 +264,7 @@ fn generate_projections(
             },
         )| {
             let mut attrs = attrs.clone();
-            attrs.retain(|a| !a.path().is_ident("pin"));
+            attrs.retain(keep_attr);
             let mut no_doc_attrs = attrs.clone();
             no_doc_attrs.retain(|a| !a.path().is_ident("doc"));
             let ident = ident
@@ -359,7 +364,7 @@ fn generate_the_pin_data(
         pinned: bool,
     ) -> TokenStream {
         let mut attrs = attrs.clone();
-        attrs.retain(|a| !a.path().is_ident("pin"));
+        attrs.retain(keep_attr);
         let ident = ident
             .as_ref()
             .expect("only structs with named fields are supported");
