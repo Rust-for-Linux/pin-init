@@ -164,7 +164,10 @@ fn generate_unpin_impl(
     quote! {
         // This struct will be used for the unpin analysis. It is needed, because only structurally
         // pinned fields are relevant whether the struct should implement `Unpin`.
-        #[allow(dead_code)] // The fields below are never used.
+        #[allow(
+            dead_code, // The fields below are never used.
+            non_snake_case // The warning will be emitted on the struct definition.
+        )]
         struct __Unpin #generics_with_pin_lt
         #where_token
             #predicates
@@ -300,7 +303,9 @@ fn generate_projections(
     let docs = format!(" Pin-projections of [`{ident}`]");
     quote! {
         #[doc = #docs]
-        #[allow(dead_code)]
+        // Allow `non_snake_case` since the same warning will be emitted on
+        // the struct definition.
+        #[allow(dead_code, non_snake_case)]
         #[doc(hidden)]
         #vis struct #projection #generics_with_pin_lt
             #whr
@@ -393,6 +398,9 @@ fn generate_the_pin_data(
             ///   to deallocate.
             #pin_safety
             #(#attrs)*
+            // Allow `non_snake_case` since the same warning will be emitted on
+            // the struct definition.
+            #[allow(non_snake_case)]
             #vis unsafe fn #ident<E>(
                 self,
                 slot: *mut #ty,
