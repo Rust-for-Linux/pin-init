@@ -13,7 +13,7 @@ where
     _pin: PhantomPinned,
 }
 /// Pin-projections of [`Foo`]
-#[allow(dead_code)]
+#[allow(dead_code, non_snake_case)]
 #[doc(hidden)]
 struct FooProjection<'__pin, 'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
 where
@@ -98,6 +98,7 @@ const _: () = {
         /// - `(*slot).#field_name` is properly aligned.
         /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
         ///    memory.
+        #[allow(non_snake_case)]
         #[inline(always)]
         unsafe fn array(
             self,
@@ -114,6 +115,7 @@ const _: () = {
         /// - `(*slot).#field_name` is properly aligned.
         /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
         ///    memory.
+        #[allow(non_snake_case)]
         #[inline(always)]
         unsafe fn r(
             self,
@@ -130,6 +132,7 @@ const _: () = {
         /// - `(*slot).#field_name` is properly aligned.
         /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
         ///    memory.
+        #[allow(non_snake_case)]
         #[inline(always)]
         unsafe fn _pin(
             self,
@@ -157,7 +160,7 @@ const _: () = {
             }
         }
     }
-    #[allow(dead_code)]
+    #[allow(dead_code, non_snake_case)]
     struct __Unpin<'__pin, 'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
     where
         T: Bar<'a, 1>,

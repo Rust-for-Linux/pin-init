@@ -5,7 +5,7 @@ struct Foo {
     _pin: PhantomPinned,
 }
 /// Pin-projections of [`Foo`]
-#[allow(dead_code)]
+#[allow(dead_code, non_snake_case)]
 #[doc(hidden)]
 struct FooProjection<'__pin> {
     array: &'__pin mut [u8; 1024 * 1024],
@@ -62,6 +62,7 @@ const _: () = {
         /// - `(*slot).#field_name` is properly aligned.
         /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
         ///    memory.
+        #[allow(non_snake_case)]
         #[inline(always)]
         unsafe fn array(
             self,
@@ -78,6 +79,7 @@ const _: () = {
         /// - `(*slot).#field_name` is properly aligned.
         /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
         ///    memory.
+        #[allow(non_snake_case)]
         #[inline(always)]
         unsafe fn _pin(
             self,
@@ -97,7 +99,7 @@ const _: () = {
             }
         }
     }
-    #[allow(dead_code)]
+    #[allow(dead_code, non_snake_case)]
     struct __Unpin<'__pin> {
         __phantom_pin: ::pin_init::__internal::PhantomInvariantLifetime<'__pin>,
         __phantom: ::pin_init::__internal::PhantomInvariant<Foo>,
