@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check by `#[pin_data]`.
 - `#[pin_data]` no longer produces additional `non_snake_case` warnings if field names
   are not of snake case. Standard field definition warnings are unaffected.
+- `init!` and `pin_init!` no longer produce `non_snake_case` warnings if field names
+  are not of snake case. Warnings on the struct definition are unaffected.
 
 ## [0.0.10] - 2025-08-19
 
