@@ -1,6 +1,4 @@
 #![allow(clippy::undocumented_unsafe_blocks)]
-#![cfg_attr(USE_RUSTC_FEATURES, feature(lint_reasons))]
-#![cfg_attr(USE_RUSTC_FEATURES, feature(raw_ref_op))]
 #![cfg_attr(feature = "alloc", feature(allocator_api))]
 
 #[cfg(all(not(feature = "std"), feature = "alloc"))]

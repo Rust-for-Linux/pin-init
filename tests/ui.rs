@@ -1,5 +1,3 @@
-#![cfg_attr(USE_RUSTC_FEATURES, feature(lint_reasons))]
-
 #[test]
 #[cfg_attr(not(UI_TESTS), ignore)]
 fn ui_compile_fail() {

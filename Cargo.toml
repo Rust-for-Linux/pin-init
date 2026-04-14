@@ -2,6 +2,7 @@
 name = "pin-init"
 version = "0.0.10"
 edition = "2021"
+rust-version = "1.82"
 
 authors = [
     "Benno Lossin <lossin@kernel.org>",

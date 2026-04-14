@@ -324,7 +324,7 @@ jobs:
           cargo hack \
             --clean-per-run \
             --feature-powerset \
-            --version-range 1.78.. \
+            --version-range 1.82.. \
             --clean-per-version \
             check \
             --locked \

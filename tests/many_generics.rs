@@ -1,4 +1,3 @@
-#![cfg_attr(USE_RUSTC_FEATURES, feature(lint_reasons))]
 #![allow(dead_code)]
 
 use core::{marker::PhantomPinned, pin::Pin};
