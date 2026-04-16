@@ -1,5 +1,4 @@
 #![cfg_attr(feature = "alloc", feature(allocator_api))]
-#![cfg_attr(USE_RUSTC_FEATURES, feature(lint_reasons))]
 
 #[test]
 #[cfg(feature = "alloc")]
