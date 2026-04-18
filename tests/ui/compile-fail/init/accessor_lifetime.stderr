@@ -1,0 +1,17 @@
+error[E0505]: cannot move out of value because it is borrowed
+  --> tests/ui/compile-fail/init/accessor_lifetime.rs:8:13
+   |
+ 8 |       let _ = init!(Foo {
+   |  _____________^
+ 9 | |         x: 0,
+10 | |         _: {
+11 | |             let _: &'static usize = x;
+   | |                    -------------- type annotation requires that borrow lasts for `'static`
+12 | |         },
+13 | |     });
+   | |      ^
+   | |      |
+   | |______move out of value occurs here
+   |        borrow of value occurs here
+   |
+   = note: this error originates in the macro `init` (in Nightly builds, run with -Z macro-backtrace for more info)
