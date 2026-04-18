@@ -238,32 +238,37 @@ fn stack_init_reuse() {
 /// When a value of this type is dropped, it drops a `T`.
 ///
 /// Can be forgotten to prevent the drop.
-pub struct DropGuard<T: ?Sized> {
-    ptr: *mut T,
+///
+/// # Invariants
+///
+/// `ptr` will not be accessed or dropped after `DropGuard` is dropped.
+pub struct DropGuard<'a, T: ?Sized> {
+    ptr: &'a mut T,
 }
 
-impl<T: ?Sized> DropGuard<T> {
+impl<'a, T: ?Sized> DropGuard<'a, T> {
     /// Creates a new [`DropGuard<T>`]. It will [`ptr::drop_in_place`] `ptr` when it gets dropped.
     ///
     /// # Safety
     ///
-    /// `ptr` must be a valid pointer.
-    ///
-    /// It is the callers responsibility that `self` will only get dropped if the pointee of `ptr`:
-    /// - has not been dropped,
-    /// - is not accessible by any other means,
-    /// - will not be dropped by any other means.
+    /// `ptr` must not be accessed or dropped after `DropGuard` is dropped.
     #[inline]
-    pub unsafe fn new(ptr: *mut T) -> Self {
+    pub unsafe fn new(ptr: &'a mut T) -> Self {
+        // INVARIANT: By safety requirement.
         Self { ptr }
+    }
+
+    /// Create a let binding for accessor use.
+    #[inline]
+    pub fn let_binding(&mut self) -> &mut T {
+        self.ptr
     }
 }
 
-impl<T: ?Sized> Drop for DropGuard<T> {
+impl<T: ?Sized> Drop for DropGuard<'_, T> {
     #[inline]
     fn drop(&mut self) {
-        // SAFETY: A `DropGuard` can only be constructed using the unsafe `new` function
-        // ensuring that this operation is safe.
+        // SAFETY: `self.ptr` is not going to be accessed or dropped later.
         unsafe { ptr::drop_in_place(self.ptr) }
     }
 }
