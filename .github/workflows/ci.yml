@@ -17,8 +17,9 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rustfmt
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo fmt --check --all' --root
@@ -29,7 +30,9 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
       - run: cargo install cargo-rdme
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo rdme --check' --root
@@ -40,9 +43,9 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo doc --all-features --no-deps' --root
@@ -55,8 +58,9 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: clippy
       - run: cargo install cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -96,8 +100,9 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - run: cargo install cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -121,8 +126,9 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - run: cargo install cargo-expand
       - run: cargo install cargo-hack
@@ -154,8 +160,9 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@beta
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: beta
           components: rust-src
       - run: cargo install cargo-expand
       - run: cargo install cargo-hack
@@ -191,7 +198,7 @@ jobs:
       - run: |
           echo "NIGHTLY=nightly-$(curl -s https://rust-lang.github.io/rustup-components-history/x86_64-unknown-linux-gnu/miri)" >> $GITHUB_ENV
       - name: Install ${{env.NIGHTLY}}
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{env.NIGHTLY}}
           components: miri, rust-src
@@ -216,8 +223,9 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - name: enable debug symbols
         run: |
@@ -284,7 +292,9 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
       - run: cargo install cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: |
@@ -312,8 +322,9 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: stable
           components: rust-src
       - run: cargo install cargo-hack
       - run: cargo install cargo-expand
@@ -346,8 +357,9 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - run: cargo install cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -410,9 +422,9 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - run: sudo apt-get install -y linkchecker
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -426,8 +438,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - run: cargo install cargo-expand
       - run: cargo update
