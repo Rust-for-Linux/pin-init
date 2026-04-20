@@ -44,7 +44,7 @@ git format-patch --quiet --output-directory "$patches" "$commit"
 
 pushd "$patches" > /dev/null
 
-sed -i 's/^\(Subject: \[PATCH .*\] \)rust: pin-init: /\1/' *
+sed -i 's/^\(Subject: \[PATCH.*\] \)rust: pin-init: /\1/' *
 
 popd > /dev/null # $patches
 
