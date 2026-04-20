@@ -13,36 +13,39 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rustfmt
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo fmt --check --all' --root
   readme:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
       - run: cargo install cargo-rdme
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo rdme --check' --root
   docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo doc --all-features --no-deps' --root
@@ -51,12 +54,13 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: clippy
       - run: cargo install cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -92,12 +96,13 @@ jobs:
   ui-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - run: cargo install cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -117,12 +122,13 @@ jobs:
           - "--features default test --doc"
     name: "nightly/${{matrix.kind}}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - run: cargo install cargo-expand
       - run: cargo install cargo-hack
@@ -150,12 +156,13 @@ jobs:
           - "--features default test --doc"
     name: "beta/${{matrix.kind}}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@beta
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: beta
           components: rust-src
       - run: cargo install cargo-expand
       - run: cargo install cargo-hack
@@ -184,14 +191,14 @@ jobs:
           - "-Zmiri-strict-provenance"
           - "-Zmiri-tree-borrows -Zmiri-strict-provenance"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
       - run: |
           echo "NIGHTLY=nightly-$(curl -s https://rust-lang.github.io/rustup-components-history/x86_64-unknown-linux-gnu/miri)" >> $GITHUB_ENV
       - name: Install ${{env.NIGHTLY}}
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{env.NIGHTLY}}
           components: miri, rust-src
@@ -212,12 +219,13 @@ jobs:
       matrix:
         targets: ["--doc", "--all-targets"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - name: enable debug symbols
         run: |
@@ -280,11 +288,13 @@ jobs:
         kind: ["check", "test"]
     name: "msrv/${{matrix.kind}}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
       - run: cargo install cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: |
@@ -308,12 +318,13 @@ jobs:
   nightly-msrv:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: stable
           components: rust-src
       - run: cargo install cargo-hack
       - run: cargo install cargo-expand
@@ -342,12 +353,13 @@ jobs:
     runs-on: ${{matrix.os}}
     name: "os-check (${{matrix.os}})"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - run: cargo install cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -362,7 +374,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
@@ -374,12 +386,12 @@ jobs:
   apply:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: Rust-for-Linux/linux
           path: "kernel"
           ref: pin-init-next
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           path: "pin-init"
           fetch-depth: 0
@@ -406,13 +418,13 @@ jobs:
   link-heartbeat:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@nightly
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - run: sudo apt-get install -y linkchecker
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -425,9 +437,10 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - run: cargo install cargo-expand
       - run: cargo update
