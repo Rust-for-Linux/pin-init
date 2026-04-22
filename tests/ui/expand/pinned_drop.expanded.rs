@@ -49,45 +49,20 @@ const _: () = {
         /// # Safety
         ///
         /// - `slot` is a valid pointer to uninitialized memory.
-        /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
-        ///   to deallocate.
-        unsafe fn array<E>(
+        unsafe fn array<'__slot>(
             self,
             slot: *mut [u8; 1024 * 1024],
-            init: impl ::pin_init::Init<[u8; 1024 * 1024], E>,
-        ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::Init::__init(init, slot) }
-        }
-        /// # Safety
-        ///
-        /// Same safety requirement as drop guard types.
-        unsafe fn __project_array<'__slot>(
-            self,
-            slot: &'__slot mut [u8; 1024 * 1024],
-        ) -> ::pin_init::__internal::UnpinnedGuard<'__slot, [u8; 1024 * 1024]> {
-            unsafe { ::pin_init::__internal::UnpinnedGuard::new(slot) }
+        ) -> ::pin_init::__internal::UnpinnedSlot<'__slot, [u8; 1024 * 1024]> {
+            unsafe { ::pin_init::__internal::UnpinnedSlot::new(slot) }
         }
         /// # Safety
         ///
         /// - `slot` is a valid pointer to uninitialized memory.
-        /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
-        ///   to deallocate.
-        /// - `slot` will not move until it is dropped, i.e. it will be pinned.
-        unsafe fn _pin<E>(
+        unsafe fn _pin<'__slot>(
             self,
             slot: *mut PhantomPinned,
-            init: impl ::pin_init::PinInit<PhantomPinned, E>,
-        ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::PinInit::__pinned_init(init, slot) }
-        }
-        /// # Safety
-        ///
-        /// Same safety requirement as drop guard types.
-        unsafe fn __project__pin<'__slot>(
-            self,
-            slot: &'__slot mut PhantomPinned,
-        ) -> ::pin_init::__internal::PinnedGuard<'__slot, PhantomPinned> {
-            unsafe { ::pin_init::__internal::PinnedGuard::new(slot) }
+        ) -> ::pin_init::__internal::PinnedSlot<'__slot, PhantomPinned> {
+            unsafe { ::pin_init::__internal::PinnedSlot::new(slot) }
         }
     }
     unsafe impl ::pin_init::__internal::HasPinData for Foo {

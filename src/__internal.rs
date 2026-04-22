@@ -211,6 +211,105 @@ fn stack_init_reuse() {
     println!("{value:?}");
 }
 
+/// Represent an uninitialized field in a pinned struct that is not pinned.
+///
+/// # Invariants
+///
+/// `slot` is a valid pointer to uninitialized memory.
+pub struct UnpinnedSlot<'a, T: ?Sized> {
+    slot: *mut T,
+    _phantom: PhantomData<&'a mut T>,
+}
+
+impl<'a, T: ?Sized> UnpinnedSlot<'a, T> {
+    /// # Safety
+    ///
+    /// `slot` is a valid pointer to uninitialized memory.
+    #[inline]
+    pub unsafe fn new(slot: *mut T) -> Self {
+        // INVARIANT: Per safety requirement.
+        Self {
+            slot,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Initialize the field by value.
+    #[inline]
+    pub fn write(self, value: T) -> UnpinnedGuard<'a, T>
+    where
+        T: Sized,
+    {
+        // SAFETY: `slot` is a valid pointer for write.
+        unsafe { self.slot.write(value) }
+        // SAFETY: `slot` is initialized, and `slot` will not be dropped via other means.
+        unsafe { UnpinnedGuard::new(&mut *self.slot) }
+    }
+
+    /// Initialize the field.
+    #[inline]
+    pub fn init<E>(self, init: impl Init<T, E>) -> Result<UnpinnedGuard<'a, T>, E> {
+        // SAFETY:
+        // - `slot` is valid
+        // - when `Err` is returned, we also propagate the error without touching `slot`;
+        //   also `self` is consumed so it cannot be touched further.
+        unsafe { init.__init(self.slot)? };
+
+        // SAFETY: `slot` is initialized, and `slot` will not be dropped via other means.
+        Ok(unsafe { UnpinnedGuard::new(&mut *self.slot) })
+    }
+}
+
+/// Represent an uninitialized field in a pinned struct that is pinned.
+///
+/// # Invariants
+///
+/// `slot` is a valid pointer to uninitialized memory and pinned.
+pub struct PinnedSlot<'a, T: ?Sized> {
+    pub slot: *mut T,
+    pub _phantom: PhantomData<&'a mut T>,
+}
+
+impl<'a, T: ?Sized> PinnedSlot<'a, T> {
+    /// # Safety
+    ///
+    /// `slot` is a valid pointer to uninitialized memory and pinned.
+    #[inline]
+    pub unsafe fn new(slot: *mut T) -> Self {
+        // INVARIANT: Per safety requirement.
+        Self {
+            slot,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Initialize the field by value.
+    #[inline]
+    pub fn write(self, value: T) -> PinnedGuard<'a, T>
+    where
+        T: Sized,
+    {
+        // SAFETY: `slot` is a valid pointer for write.
+        unsafe { self.slot.write(value) }
+        // SAFETY: `slot` is initialized, is pinned, and `slot` will not be dropped via other means.
+        unsafe { PinnedGuard::new(&mut *self.slot) }
+    }
+
+    /// Initialize the field.
+    #[inline]
+    pub fn init<E>(self, init: impl PinInit<T, E>) -> Result<PinnedGuard<'a, T>, E> {
+        // SAFETY:
+        // - `slot` is valid
+        // - when `Err` is returned, we also propagate the error without touching `slot`;
+        //   also `self` is consumed so it cannot be touched further.
+        // - the drop guard will not hand out `&mut` (but only `Pin<&mut T>`) it has been dropped.
+        unsafe { init.__pinned_init(self.slot)? };
+
+        // SAFETY: `slot` is initialized, is pinned, and `slot` will not be dropped via other means.
+        Ok(unsafe { PinnedGuard::new(&mut *self.slot) })
+    }
+}
+
 /// When a value of this type is dropped, it drops a `T`.
 ///
 /// Can be forgotten to prevent the drop.

@@ -1,18 +1,30 @@
 error[E0308]: mismatched types
   --> tests/ui/compile-fail/init/missing_comma_with_zeroable.rs:12:12
    |
-12 |         a: 0..Zeroable::init_zeroed()
-   |         -  ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `usize`, found `Range<{integer}>`
-   |         |
-   |         arguments to this function are incorrect
+11 |       let _ = init!(Foo {
+   |  _____________-
+12 | |         a: 0..Zeroable::init_zeroed()
+   | |            ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `usize`, found `Range<{integer}>`
+13 | |     });
+   | |______- arguments to this method are incorrect
    |
    = note: expected type `usize`
             found struct `std::ops::Range<{integer}>`
-note: function defined here
-  --> $RUST/core/src/ptr/mod.rs
+help: the return type of this call is `std::ops::Range<{integer}>` due to the type of the argument passed
+  --> tests/ui/compile-fail/init/missing_comma_with_zeroable.rs:11:13
    |
-   | pub const unsafe fn write<T>(dst: *mut T, src: T) {
-   |                     ^^^^^
+11 |       let _ = init!(Foo {
+   |  _____________^
+12 | |         a: 0..Zeroable::init_zeroed()
+   | |            -------------------------- this argument influences the return type of `write`
+13 | |     });
+   | |______^
+note: method defined here
+  --> src/__internal.rs
+   |
+   |     pub fn write(self, value: T) -> UnpinnedGuard<'a, T>
+   |            ^^^^^
+   = note: this error originates in the macro `init` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0063]: missing field `b` in initializer of `Foo`
   --> tests/ui/compile-fail/init/missing_comma_with_zeroable.rs:11:19

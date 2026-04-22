@@ -5,14 +5,23 @@ error[E0308]: mismatched types
    |                 ------------------ the found opaque type
 ...
 21 |         pin_init!(Self { bar: Bar::new() })
-   |                          ---  ^^^^^^^^^^ expected `Bar`, found opaque type
-   |                          |
-   |                          arguments to this function are incorrect
+   |         ----------------------^^^^^^^^^^---
+   |         |                     |
+   |         |                     expected `Bar`, found opaque type
+   |         arguments to this method are incorrect
    |
    = note:   expected struct `Bar`
            found opaque type `impl pin_init::PinInit<Bar>`
-note: function defined here
-  --> $RUST/core/src/ptr/mod.rs
+help: the return type of this call is `impl pin_init::PinInit<Bar>` due to the type of the argument passed
+  --> tests/ui/compile-fail/init/colon_instead_of_arrow.rs:21:9
    |
-   | pub const unsafe fn write<T>(dst: *mut T, src: T) {
-   |                     ^^^^^
+21 |         pin_init!(Self { bar: Bar::new() })
+   |         ^^^^^^^^^^^^^^^^^^^^^^----------^^^
+   |                               |
+   |                               this argument influences the return type of `write`
+note: method defined here
+  --> src/__internal.rs
+   |
+   |     pub fn write(self, value: T) -> UnpinnedGuard<'a, T>
+   |            ^^^^^
+   = note: this error originates in the macro `pin_init` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -360,52 +360,21 @@ fn generate_the_pin_data(
         let ident = ident
             .as_ref()
             .expect("only structs with named fields are supported");
-        let project_ident = format_ident!("__project_{ident}");
-        let (init_ty, init_fn, guard_ty, pin_safety) = if pinned {
-            (
-                quote!(PinInit),
-                quote!(__pinned_init),
-                quote!(PinnedGuard),
-                quote!(
-                    /// - `slot` will not move until it is dropped, i.e. it will be pinned.
-                ),
-            )
+        let slot_ty = if pinned {
+            quote!(PinnedSlot)
         } else {
-            (
-                quote!(Init),
-                quote!(__init),
-                quote!(UnpinnedGuard),
-                quote!(),
-            )
+            quote!(UnpinnedSlot)
         };
         quote! {
             /// # Safety
             ///
             /// - `slot` is a valid pointer to uninitialized memory.
-            /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
-            ///   to deallocate.
-            #pin_safety
             #(#attrs)*
-            #vis unsafe fn #ident<E>(
+            #vis unsafe fn #ident<'__slot>(
                 self,
                 slot: *mut #ty,
-                init: impl ::pin_init::#init_ty<#ty, E>,
-            ) -> ::core::result::Result<(), E> {
-                // SAFETY: this function has the same safety requirements as the __init function
-                // called below.
-                unsafe { ::pin_init::#init_ty::#init_fn(init, slot) }
-            }
-
-            /// # Safety
-            ///
-            /// Same safety requirement as drop guard types.
-            #(#attrs)*
-            #vis unsafe fn #project_ident<'__slot>(
-                self,
-                slot: &'__slot mut #ty,
-            ) -> ::pin_init::__internal::#guard_ty<'__slot, #ty> {
-                // SAFETY: By safety requirement.
-                unsafe { ::pin_init::__internal::#guard_ty::new(slot) }
+            ) -> ::pin_init::__internal::#slot_ty<'__slot, #ty> {
+                unsafe { ::pin_init::__internal::#slot_ty::new(slot) }
             }
         }
     }

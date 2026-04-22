@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, quote_spanned};
+use quote::{format_ident, quote};
 use syn::{
     braced,
     parse::{End, Parse},
@@ -229,94 +229,47 @@ fn init_fields(
             }
         };
 
-        let init = match kind {
-            InitializerKind::Value { ident, value } => {
-                let mut value_ident = ident.clone();
-                let value_prep = value.as_ref().map(|value| &value.1).map(|value| {
-                    // Setting the span of `value_ident` to `value`'s span improves error messages
-                    // when the type of `value` is wrong.
-                    value_ident.set_span(value.span());
-                    quote!(let #value_ident = #value;)
-                });
-                // Again span for better diagnostics
-                let write = quote_spanned!(ident.span()=> ::core::ptr::write);
-                quote! {
-                    #(#attrs)*
-                    {
-                        #value_prep
-                        // SAFETY: TODO
-                        unsafe { #write(&raw mut (*#slot).#ident, #value_ident) };
-                    }
-                }
+        let slot = if pinned {
+            quote! {
+                // SAFETY: `slot` is valid. The generate slot projection method will ensure the
+                // correct slot type being used.
+                (unsafe { #data.#ident(&raw mut (*#slot).#ident) })
             }
-            InitializerKind::Init { ident, value, .. } => {
-                // Again span for better diagnostics
-                let init = format_ident!("init", span = value.span());
-                let value_init = if pinned {
-                    quote! {
-                        // SAFETY:
-                        // - `slot` is valid, because we are inside of an initializer closure, we
-                        //   return when an error/panic occurs.
-                        // - We also use `#data` to require the correct trait (`Init` or `PinInit`)
-                        //   for `#ident`.
-                        unsafe { #data.#ident(&raw mut (*#slot).#ident, #init)? };
-                    }
-                } else {
-                    quote! {
-                        // SAFETY: `slot` is valid, because we are inside of an initializer
-                        // closure, we return when an error/panic occurs.
-                        unsafe {
-                            ::pin_init::Init::__init(
-                                #init,
-                                &raw mut (*#slot).#ident,
-                            )?
-                        };
-                    }
-                };
-                quote! {
-                    #(#attrs)*
-                    {
-                        let #init = #value;
-                        #value_init
-                    }
-                }
+        } else {
+            quote! {
+                // SAFETY: `slot` is valid and always unpinned for `init!`.
+                (unsafe { ::pin_init::__internal::UnpinnedSlot::new(&raw mut (*#slot).#ident) })
             }
-            InitializerKind::Code { .. } => unreachable!(),
         };
 
         // `mixed_site` ensures that the guard is not accessible to the user-controlled code.
         let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
 
-        let guard_creation = if pinned {
-            let project_ident = format_ident!("__project_{ident}");
-            quote! {
-                // SAFETY:
-                // - We forget the guard later when initialization has succeeded. If we didn't
-                //   forget it, they would not be further accessed again.
-                // - The initialization is pinned.
-                unsafe { #data.#project_ident(&mut (*slot).#ident) }
-            }
-        } else {
-            quote! {
-                // SAFETY: We forget the guard later when initialization has succeeded. If we didn't
-                // forget it, they would not be further accessed again.
-                unsafe {
-                    ::pin_init::__internal::UnpinnedGuard::new(
-                        &mut (*slot).#ident
-                    )
+        let init = match kind {
+            InitializerKind::Value { ident, value } => {
+                let value = value
+                    .as_ref()
+                    .map(|(_, value)| quote!(#value))
+                    .unwrap_or_else(|| quote!(#ident));
+
+                quote! {
+                    #(#attrs)*
+                    let mut #guard = #slot.write(#value);
                 }
             }
+            InitializerKind::Init { value, .. } => {
+                quote! {
+                    #(#attrs)*
+                    let mut #guard = #slot.init(#value)?;
+                }
+            }
+            InitializerKind::Code { .. } => unreachable!(),
         };
 
         res.extend(quote! {
             #init
 
             #(#cfgs)*
-            let mut #guard = #guard_creation;
-            #(#cfgs)*
-            // NOTE: The reference is derived from the guard so that it only lives as long as the
-            // guard does and cannot escape the scope. If it's created via `&mut (*#slot).#ident`
-            // like the unaligned field guard, it will become effectively `'static`.
             #[allow(unused_variables)]
             let #ident = #guard.let_binding();
         });

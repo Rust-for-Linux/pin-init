@@ -2,15 +2,24 @@ error[E0308]: mismatched types
   --> tests/ui/compile-fail/init/shadowing_field.rs:10:31
    |
 10 |     let _ = init!(Foo { x, y: x });
-   |                            -  ^ expected `usize`, found `&mut usize`
-   |                            |
-   |                            arguments to this function are incorrect
+   |             ------------------^---
+   |             |                 |
+   |             |                 expected `usize`, found `&mut usize`
+   |             arguments to this method are incorrect
    |
-note: function defined here
-  --> $RUST/core/src/ptr/mod.rs
+help: the return type of this call is `&mut usize` due to the type of the argument passed
+  --> tests/ui/compile-fail/init/shadowing_field.rs:10:13
    |
-   | pub const unsafe fn write<T>(dst: *mut T, src: T) {
-   |                     ^^^^^
+10 |     let _ = init!(Foo { x, y: x });
+   |             ^^^^^^^^^^^^^^^^^^-^^^
+   |                               |
+   |                               this argument influences the return type of `write`
+note: method defined here
+  --> src/__internal.rs
+   |
+   |     pub fn write(self, value: T) -> UnpinnedGuard<'a, T>
+   |            ^^^^^
+   = note: this error originates in the macro `init` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider dereferencing the borrow
    |
 10 |     let _ = init!(Foo { x, y: *x });
