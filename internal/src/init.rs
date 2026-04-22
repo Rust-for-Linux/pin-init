@@ -238,6 +238,20 @@ fn init_fields(
             cfgs.retain(|attr| attr.path().is_ident("cfg"));
             cfgs
         };
+
+        let ident = match kind {
+            InitializerKind::Value { ident, .. } => ident,
+            InitializerKind::Init { ident, .. } => ident,
+            InitializerKind::Code { block, .. } => {
+                res.extend(quote! {
+                    #(#attrs)*
+                    #[allow(unused_braces)]
+                    #block
+                });
+                continue;
+            }
+        };
+
         let init = match kind {
             InitializerKind::Value { ident, value } => {
                 let mut value_ident = ident.clone();
@@ -290,51 +304,47 @@ fn init_fields(
                     }
                 }
             }
-            InitializerKind::Code { block: value, .. } => quote! {
-                #(#attrs)*
-                #[allow(unused_braces)]
-                #value
-            },
+            InitializerKind::Code { .. } => unreachable!(),
         };
-        res.extend(init);
-        if let Some(ident) = kind.ident() {
-            // `mixed_site` ensures that the guard is not accessible to the user-controlled code.
-            let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
 
-            // NOTE: The reference is derived from the guard so that it only lives as long as the
-            // guard does and cannot escape the scope. If it's created via `&mut (*#slot).#ident`
-            // like the unaligned field guard, it will become effectively `'static`.
-            let accessor = if pinned {
-                let project_ident = format_ident!("__project_{ident}");
-                quote! {
-                    // SAFETY: the initialization is pinned.
-                    unsafe { #data.#project_ident(#guard.let_binding()) }
-                }
-            } else {
-                quote! {
-                    #guard.let_binding()
-                }
+        // `mixed_site` ensures that the guard is not accessible to the user-controlled code.
+        let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
+
+        // NOTE: The reference is derived from the guard so that it only lives as long as the
+        // guard does and cannot escape the scope. If it's created via `&mut (*#slot).#ident`
+        // like the unaligned field guard, it will become effectively `'static`.
+        let accessor = if pinned {
+            let project_ident = format_ident!("__project_{ident}");
+            quote! {
+                // SAFETY: the initialization is pinned.
+                unsafe { #data.#project_ident(#guard.let_binding()) }
+            }
+        } else {
+            quote! {
+                #guard.let_binding()
+            }
+        };
+
+        res.extend(quote! {
+            #init
+
+            #(#cfgs)*
+            // Create the drop guard.
+            //
+            // SAFETY: We forget the guard later when initialization has succeeded. If we didn't
+            // forget it, they would not be further accessed again.
+            let mut #guard = unsafe {
+                ::pin_init::__internal::DropGuard::new(
+                    &mut (*slot).#ident
+                )
             };
 
-            res.extend(quote! {
-                #(#cfgs)*
-                // Create the drop guard.
-                //
-                // SAFETY: We forget the guard later when initialization has succeeded. If we didn't
-                // forget it, they would not be further accessed again.
-                let mut #guard = unsafe {
-                    ::pin_init::__internal::DropGuard::new(
-                        &mut (*slot).#ident
-                    )
-                };
-
-                #(#cfgs)*
-                #[allow(unused_variables)]
-                let #ident = #accessor;
-            });
-            guards.push(guard);
-            guard_attrs.push(cfgs);
-        }
+            #(#cfgs)*
+            #[allow(unused_variables)]
+            let #ident = #accessor;
+        });
+        guards.push(guard);
+        guard_attrs.push(cfgs);
     }
     quote! {
         #res
