@@ -98,12 +98,12 @@ const _: () = {
         }
         /// # Safety
         ///
-        /// `slot` points at the field `array` inside of `Foo`, which is pinned.
+        /// Same safety requirement as drop guard types.
         unsafe fn __project_array<'__slot>(
             self,
             slot: &'__slot mut [u8; 1024 * 1024],
-        ) -> &'__slot mut [u8; 1024 * 1024] {
-            slot
+        ) -> ::pin_init::__internal::UnpinnedGuard<'__slot, [u8; 1024 * 1024]> {
+            unsafe { ::pin_init::__internal::UnpinnedGuard::new(slot) }
         }
         /// # Safety
         ///
@@ -119,12 +119,12 @@ const _: () = {
         }
         /// # Safety
         ///
-        /// `slot` points at the field `r` inside of `Foo`, which is pinned.
+        /// Same safety requirement as drop guard types.
         unsafe fn __project_r<'__slot>(
             self,
             slot: &'__slot mut &'b mut [&'a mut T; SIZE],
-        ) -> &'__slot mut &'b mut [&'a mut T; SIZE] {
-            slot
+        ) -> ::pin_init::__internal::UnpinnedGuard<'__slot, &'b mut [&'a mut T; SIZE]> {
+            unsafe { ::pin_init::__internal::UnpinnedGuard::new(slot) }
         }
         /// # Safety
         ///
@@ -141,12 +141,12 @@ const _: () = {
         }
         /// # Safety
         ///
-        /// `slot` points at the field `_pin` inside of `Foo`, which is pinned.
+        /// Same safety requirement as drop guard types.
         unsafe fn __project__pin<'__slot>(
             self,
             slot: &'__slot mut PhantomPinned,
-        ) -> ::core::pin::Pin<&'__slot mut PhantomPinned> {
-            unsafe { ::core::pin::Pin::new_unchecked(slot) }
+        ) -> ::pin_init::__internal::PinnedGuard<'__slot, PhantomPinned> {
+            unsafe { ::pin_init::__internal::PinnedGuard::new(slot) }
         }
     }
     unsafe impl<

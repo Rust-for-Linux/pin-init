@@ -241,17 +241,18 @@ fn stack_init_reuse() {
 ///
 /// # Invariants
 ///
-/// `ptr` will not be accessed or dropped after `DropGuard` is dropped.
-pub struct DropGuard<'a, T: ?Sized> {
+/// `ptr` will not be accessed or dropped after `UnpinnedGuard` is dropped.
+pub struct UnpinnedGuard<'a, T: ?Sized> {
     ptr: &'a mut T,
 }
 
-impl<'a, T: ?Sized> DropGuard<'a, T> {
-    /// Creates a new [`DropGuard<T>`]. It will [`ptr::drop_in_place`] `ptr` when it gets dropped.
+impl<'a, T: ?Sized> UnpinnedGuard<'a, T> {
+    /// Creates a new [`UnpinnedGuard<T>`]. It will [`ptr::drop_in_place`] `ptr` when it gets
+    /// dropped.
     ///
     /// # Safety
     ///
-    /// `ptr` must not be accessed or dropped after `DropGuard` is dropped.
+    /// `ptr` must not be accessed or dropped after `UnpinnedGuard` is dropped.
     #[inline]
     pub unsafe fn new(ptr: &'a mut T) -> Self {
         // INVARIANT: By safety requirement.
@@ -265,7 +266,48 @@ impl<'a, T: ?Sized> DropGuard<'a, T> {
     }
 }
 
-impl<T: ?Sized> Drop for DropGuard<'_, T> {
+impl<T: ?Sized> Drop for UnpinnedGuard<'_, T> {
+    #[inline]
+    fn drop(&mut self) {
+        // SAFETY: `self.ptr` is not going to be accessed or dropped later.
+        unsafe { ptr::drop_in_place(self.ptr) }
+    }
+}
+
+/// When a value of this type is dropped, it drops a `T`.
+///
+/// Can be forgotten to prevent the drop.
+///
+/// # Invariants
+///
+/// - `ptr` will not be accessed or dropped after `PinnedGuard` is dropped.
+/// - `ptr` is pinned.
+pub struct PinnedGuard<'a, T: ?Sized> {
+    ptr: &'a mut T,
+}
+
+impl<'a, T: ?Sized> PinnedGuard<'a, T> {
+    /// Creates a new [`PinnedGuard<T>`]. It will [`ptr::drop_in_place`] `ptr` when it gets dropped.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must not be accessed or dropped after `PinnedGuard` is dropped.
+    /// - `ptr` is pinned.
+    #[inline]
+    pub unsafe fn new(ptr: &'a mut T) -> Self {
+        // INVARIANT: By safety requirement.
+        Self { ptr }
+    }
+
+    /// Create a let binding for accessor use.
+    #[inline]
+    pub fn let_binding(&mut self) -> Pin<&mut T> {
+        // SAFETY: `self.ptr` is owned by this guard and we never give out mutable reference.
+        unsafe { Pin::new_unchecked(self.ptr) }
+    }
+}
+
+impl<T: ?Sized> Drop for PinnedGuard<'_, T> {
     #[inline]
     fn drop(&mut self) {
         // SAFETY: `self.ptr` is not going to be accessed or dropped later.

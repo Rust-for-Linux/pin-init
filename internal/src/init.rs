@@ -310,18 +310,24 @@ fn init_fields(
         // `mixed_site` ensures that the guard is not accessible to the user-controlled code.
         let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
 
-        // NOTE: The reference is derived from the guard so that it only lives as long as the
-        // guard does and cannot escape the scope. If it's created via `&mut (*#slot).#ident`
-        // like the unaligned field guard, it will become effectively `'static`.
-        let accessor = if pinned {
+        let guard_creation = if pinned {
             let project_ident = format_ident!("__project_{ident}");
             quote! {
-                // SAFETY: the initialization is pinned.
-                unsafe { #data.#project_ident(#guard.let_binding()) }
+                // SAFETY:
+                // - We forget the guard later when initialization has succeeded. If we didn't
+                //   forget it, they would not be further accessed again.
+                // - The initialization is pinned.
+                unsafe { #data.#project_ident(&mut (*slot).#ident) }
             }
         } else {
             quote! {
-                #guard.let_binding()
+                // SAFETY: We forget the guard later when initialization has succeeded. If we didn't
+                // forget it, they would not be further accessed again.
+                unsafe {
+                    ::pin_init::__internal::UnpinnedGuard::new(
+                        &mut (*slot).#ident
+                    )
+                }
             }
         };
 
@@ -329,20 +335,15 @@ fn init_fields(
             #init
 
             #(#cfgs)*
-            // Create the drop guard.
-            //
-            // SAFETY: We forget the guard later when initialization has succeeded. If we didn't
-            // forget it, they would not be further accessed again.
-            let mut #guard = unsafe {
-                ::pin_init::__internal::DropGuard::new(
-                    &mut (*slot).#ident
-                )
-            };
-
+            let mut #guard = #guard_creation;
             #(#cfgs)*
+            // NOTE: The reference is derived from the guard so that it only lives as long as the
+            // guard does and cannot escape the scope. If it's created via `&mut (*#slot).#ident`
+            // like the unaligned field guard, it will become effectively `'static`.
             #[allow(unused_variables)]
-            let #ident = #accessor;
+            let #ident = #guard.let_binding();
         });
+
         guards.push(guard);
         guard_attrs.push(cfgs);
     }
