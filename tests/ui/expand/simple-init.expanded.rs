@@ -6,28 +6,14 @@ fn main() {
             use ::pin_init::__internal::HasInitData;
             Foo::__init_data()
         };
-        let init = ::pin_init::__internal::InitData::make_closure::<
-            _,
-            ::core::convert::Infallible,
-        >(
-            __data,
-            move |slot| {
+        __data
+            .__make_init::<
+                _,
+                ::core::convert::Infallible,
+            >(move |slot| {
                 #[allow(unreachable_code, clippy::diverging_sub_expression)]
                 let _ = || unsafe { ::core::ptr::write(slot, Foo {}) };
                 Ok(unsafe { ::pin_init::__internal::InitOk::new() })
-            },
-        );
-        let init = move |
-            slot,
-        | -> ::core::result::Result<(), ::core::convert::Infallible> {
-            init(slot).map(|__InitOk| ())
-        };
-        let init = unsafe {
-            ::pin_init::init_from_closure::<_, ::core::convert::Infallible>(init)
-        };
-        #[allow(
-            clippy::let_and_return,
-            reason = "some clippy versions warn about the let binding"
-        )] init
+            })
     };
 }

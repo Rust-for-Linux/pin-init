@@ -180,16 +180,35 @@ const _: () = {
             }
         }
     }
-    unsafe impl<
+    impl<
         'a,
         'b: 'a,
         T: Bar<'b> + ?Sized + 'a,
         const SIZE: usize,
-    > ::pin_init::__internal::PinData for __ThePinData<'a, 'b, T, SIZE>
+    > __ThePinData<'a, 'b, T, SIZE>
     where
         T: Bar<'a, 1>,
     {
-        type Datee = Foo<'a, 'b, T, SIZE>;
+        /// Type inference helper function.
+        #[inline(always)]
+        fn __make_init<F, E>(
+            self,
+            f: F,
+        ) -> impl ::pin_init::PinInit<Foo<'a, 'b, T, SIZE>, E>
+        where
+            F: ::core::ops::FnOnce(
+                *mut Foo<'a, 'b, T, SIZE>,
+            ) -> ::core::result::Result<::pin_init::__internal::InitOk, E>,
+        {
+            unsafe {
+                ::pin_init::pin_init_from_closure(move |
+                    slot,
+                | -> ::core::result::Result<(), E> {
+                    f(slot)?;
+                    Ok(())
+                })
+            }
+        }
     }
     #[allow(dead_code)]
     struct __Unpin<'__pin, 'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
