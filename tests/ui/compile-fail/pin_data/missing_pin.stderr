@@ -1,10 +1,11 @@
 error[E0277]: the trait bound `impl PinInit<usize>: Init<usize, _>` is not satisfied
   --> tests/ui/compile-fail/pin_data/missing_pin.rs:12:18
    |
-12 |             a <- a,
-   |             -    ^ the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
-   |             |
-   |             required by a bound introduced by this call
+11 | /         pin_init!(Self {
+12 | |             a <- a,
+   | |                  ^ the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
+13 | |         })
+   | |__________- required by a bound introduced by this call
    |
 help: the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
       but trait `Init<impl PinInit<usize>, Infallible>` is implemented for it
@@ -13,12 +14,8 @@ help: the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
    | unsafe impl<T> Init<T> for T {
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    = help: for that trait implementation, expected `impl PinInit<usize>`, found `usize`
-note: required by a bound in `__ThePinData::a`
-  --> tests/ui/compile-fail/pin_data/missing_pin.rs:4:1
+note: required by a bound in `pin_init::__internal::Slot::<pin_init::__internal::Unpinned, T>::init`
+  --> src/__internal.rs
    |
- 4 | #[pin_data]
-   | ^^^^^^^^^^^ required by this bound in `__ThePinData::a`
- 5 | struct Foo {
- 6 |     a: usize,
-   |     - required by a bound in this associated function
-   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+   |     pub fn init<E>(self, init: impl Init<T, E>) -> Result<DropGuard<Unpinned, T>, E> {
+   |                                     ^^^^^^^^^^ required by this bound in `Slot::<Unpinned, T>::init`

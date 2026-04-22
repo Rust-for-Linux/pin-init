@@ -86,82 +86,42 @@ const _: () = {
     {
         /// # Safety
         ///
-        /// - `slot` is a valid pointer to uninitialized memory.
-        /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
-        ///   to deallocate.
-        unsafe fn array<E>(
-            self,
-            slot: *mut [u8; 1024 * 1024],
-            init: impl ::pin_init::Init<[u8; 1024 * 1024], E>,
-        ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::Init::__init(init, slot) }
-        }
-        /// # Safety
-        ///
         /// - `slot` points to a `#ident` field of a pinned struct that this `__ThePinData` describes.
-        /// - `slot` is valid and properly aligned.
-        /// - `*slot` is initialized, and the ownership is transferred to the returned guard.
-        unsafe fn __project_array(
+        /// - `slot` is a valid, properly aligned and points to uninitialized and exclusively memory.
+        unsafe fn array(
             self,
             slot: *mut [u8; 1024 * 1024],
-        ) -> ::pin_init::__internal::DropGuard<
+        ) -> ::pin_init::__internal::Slot<
             ::pin_init::__internal::Unpinned,
             [u8; 1024 * 1024],
         > {
-            unsafe { ::pin_init::__internal::DropGuard::new(slot) }
-        }
-        /// # Safety
-        ///
-        /// - `slot` is a valid pointer to uninitialized memory.
-        /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
-        ///   to deallocate.
-        unsafe fn r<E>(
-            self,
-            slot: *mut &'b mut [&'a mut T; SIZE],
-            init: impl ::pin_init::Init<&'b mut [&'a mut T; SIZE], E>,
-        ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::Init::__init(init, slot) }
+            unsafe { ::pin_init::__internal::Slot::new(slot) }
         }
         /// # Safety
         ///
         /// - `slot` points to a `#ident` field of a pinned struct that this `__ThePinData` describes.
-        /// - `slot` is valid and properly aligned.
-        /// - `*slot` is initialized, and the ownership is transferred to the returned guard.
-        unsafe fn __project_r(
+        /// - `slot` is a valid, properly aligned and points to uninitialized and exclusively memory.
+        unsafe fn r(
             self,
             slot: *mut &'b mut [&'a mut T; SIZE],
-        ) -> ::pin_init::__internal::DropGuard<
+        ) -> ::pin_init::__internal::Slot<
             ::pin_init::__internal::Unpinned,
             &'b mut [&'a mut T; SIZE],
         > {
-            unsafe { ::pin_init::__internal::DropGuard::new(slot) }
-        }
-        /// # Safety
-        ///
-        /// - `slot` is a valid pointer to uninitialized memory.
-        /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
-        ///   to deallocate.
-        /// - `slot` will not move until it is dropped, i.e. it will be pinned.
-        unsafe fn _pin<E>(
-            self,
-            slot: *mut PhantomPinned,
-            init: impl ::pin_init::PinInit<PhantomPinned, E>,
-        ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::PinInit::__pinned_init(init, slot) }
+            unsafe { ::pin_init::__internal::Slot::new(slot) }
         }
         /// # Safety
         ///
         /// - `slot` points to a `#ident` field of a pinned struct that this `__ThePinData` describes.
-        /// - `slot` is valid and properly aligned.
-        /// - `*slot` is initialized, and the ownership is transferred to the returned guard.
-        unsafe fn __project__pin(
+        /// - `slot` is a valid, properly aligned and points to uninitialized and exclusively memory.
+        unsafe fn _pin(
             self,
             slot: *mut PhantomPinned,
-        ) -> ::pin_init::__internal::DropGuard<
+        ) -> ::pin_init::__internal::Slot<
             ::pin_init::__internal::Pinned,
             PhantomPinned,
         > {
-            unsafe { ::pin_init::__internal::DropGuard::new(slot) }
+            unsafe { ::pin_init::__internal::Slot::new(slot) }
         }
     }
     unsafe impl<
