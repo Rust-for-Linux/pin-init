@@ -456,11 +456,26 @@ fn generate_the_pin_data(
             }
         }
 
-        // SAFETY: TODO
-        unsafe impl #impl_generics ::pin_init::__internal::PinData for __ThePinData #ty_generics
+        impl #impl_generics __ThePinData #ty_generics
             #whr
         {
-            type Datee = #ident #ty_generics;
+            /// Type inference helper function.
+            #[inline(always)]
+            fn __make_init<F, E>(self, f: F) -> impl ::pin_init::PinInit<#ident #ty_generics, E>
+            where
+                F: ::core::ops::FnOnce(*mut #ident #ty_generics) ->
+                    ::core::result::Result<::pin_init::__internal::InitOk, E>,
+            {
+                // SAFETY: The `InitOk` token created by the macro ensures all safety requirements
+                // are met.
+                unsafe {
+                    ::pin_init::pin_init_from_closure(move |slot| ->
+                            ::core::result::Result<(), E> {
+                        f(slot)?;
+                        Ok(())
+                    })
+                }
+            }
         }
     }
 }

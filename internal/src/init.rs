@@ -103,20 +103,10 @@ pub(crate) fn expand(
         |(_, err)| Box::new(err),
     );
     let slot = format_ident!("slot");
-    let (has_data_trait, data_trait, get_data, init_from_closure) = if pinned {
-        (
-            format_ident!("HasPinData"),
-            format_ident!("PinData"),
-            format_ident!("__pin_data"),
-            format_ident!("pin_init_from_closure"),
-        )
+    let (has_data_trait, get_data) = if pinned {
+        (format_ident!("HasPinData"), format_ident!("__pin_data"))
     } else {
-        (
-            format_ident!("HasInitData"),
-            format_ident!("InitData"),
-            format_ident!("__init_data"),
-            format_ident!("init_from_closure"),
-        )
+        (format_ident!("HasInitData"), format_ident!("__init_data"))
     };
     let init_kind = get_init_kind(rest, dcx);
     let zeroable_check = match init_kind {
@@ -156,9 +146,8 @@ pub(crate) fn expand(
             // generics (which need to be present with that syntax).
             #path::#get_data()
         };
-        // Ensure that `#data` really is of type `#data` and help with type inference:
-        let init = ::pin_init::__internal::#data_trait::make_closure::<_, #error>(
-            #data,
+        // Help with type inference.
+        #data.__make_init::<_, #error>(
             move |slot| {
                 #zeroable_check
                 #this
@@ -167,19 +156,7 @@ pub(crate) fn expand(
                 // SAFETY: we are the `init!` macro that is allowed to call this.
                 Ok(unsafe { ::pin_init::__internal::InitOk::new() })
             }
-        );
-        let init = move |slot| -> ::core::result::Result<(), #error> {
-            init(slot).map(|__InitOk| ())
-        };
-        // SAFETY: TODO
-        let init = unsafe { ::pin_init::#init_from_closure::<_, #error>(init) };
-        // FIXME: this let binding is required to avoid a compiler error (cycle when computing the
-        // opaque type returned by this function) before Rust 1.81. Remove after MSRV bump.
-        #[allow(
-            clippy::let_and_return,
-            reason = "some clippy versions warn about the let binding"
-        )]
-        init
+        )
     }})
 }
 

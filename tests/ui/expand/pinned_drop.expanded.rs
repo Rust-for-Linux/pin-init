@@ -98,8 +98,24 @@ const _: () = {
             }
         }
     }
-    unsafe impl ::pin_init::__internal::PinData for __ThePinData {
-        type Datee = Foo;
+    impl __ThePinData {
+        /// Type inference helper function.
+        #[inline(always)]
+        fn __make_init<F, E>(self, f: F) -> impl ::pin_init::PinInit<Foo, E>
+        where
+            F: ::core::ops::FnOnce(
+                *mut Foo,
+            ) -> ::core::result::Result<::pin_init::__internal::InitOk, E>,
+        {
+            unsafe {
+                ::pin_init::pin_init_from_closure(move |
+                    slot,
+                | -> ::core::result::Result<(), E> {
+                    f(slot)?;
+                    Ok(())
+                })
+            }
+        }
     }
     #[allow(dead_code)]
     struct __Unpin<'__pin> {
