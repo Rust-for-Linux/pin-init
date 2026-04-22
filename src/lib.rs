@@ -1517,27 +1517,6 @@ pub unsafe trait Zeroable {
     }
 }
 
-/// Marker trait for types that allow `Option<Self>` to be set to all zeroes in order to write
-/// `None` to that location.
-///
-/// # Safety
-///
-/// The implementer needs to ensure that `unsafe impl Zeroable for Option<Self> {}` is sound.
-pub unsafe trait ZeroableOption {}
-
-// SAFETY: by the safety requirement of `ZeroableOption`, this is valid.
-unsafe impl<T: ZeroableOption> Zeroable for Option<T> {}
-
-// SAFETY: `Option<&T>` is part of the option layout optimization guarantee:
-// <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
-unsafe impl<T> ZeroableOption for &T {}
-// SAFETY: `Option<&mut T>` is part of the option layout optimization guarantee:
-// <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
-unsafe impl<T> ZeroableOption for &mut T {}
-// SAFETY: `Option<NonNull<T>>` is part of the option layout optimization guarantee:
-// <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
-unsafe impl<T> ZeroableOption for NonNull<T> {}
-
 /// Create an initializer for a zeroed `T`.
 ///
 /// The returned initializer will write `0x00` to every byte of the given `slot`.
@@ -1643,6 +1622,17 @@ macro_rules! impl_tuple_zeroable {
 
 impl_tuple_zeroable!(A, B, C, D, E, F, G, H, I, J);
 
+/// Marker trait for types that allow `Option<Self>` to be set to all zeroes in order to write
+/// `None` to that location.
+///
+/// # Safety
+///
+/// The implementer needs to ensure that `unsafe impl Zeroable for Option<Self> {}` is sound.
+pub unsafe trait ZeroableOption {}
+
+// SAFETY: by the safety requirement of `ZeroableOption`, this is valid.
+unsafe impl<T: ZeroableOption> Zeroable for Option<T> {}
+
 macro_rules! impl_fn_zeroable_option {
     ([$($abi:literal),* $(,)?] $args:tt) => {
         $(impl_fn_zeroable_option!({extern $abi} $args);)*
@@ -1668,18 +1658,27 @@ macro_rules! impl_fn_zeroable_option {
 
 impl_fn_zeroable_option!(["Rust", "C"] { A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U });
 
-macro_rules! impl_non_zero_int_zeroable_option {
-    ($($int:ty),* $(,)?) => {
-        // SAFETY: Safety comment written in the macro invocation.
-        $(unsafe impl ZeroableOption for $int {})*
+macro_rules! impl_zeroable_option {
+    ($($({$($generics:tt)*})? $t:ty, )*) => {
+        // SAFETY: Safety comments written in the macro invocation.
+        $(unsafe impl$($($generics)*)? ZeroableOption for $t {})*
     };
 }
 
-impl_non_zero_int_zeroable_option! {
+impl_zeroable_option! {
+    // SAFETY: `Option<&T>` is part of the option layout optimization guarantee:
+    // <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
+    {<T: ?Sized>} &T,
+    // SAFETY: `Option<&mut T>` is part of the option layout optimization guarantee:
+    // <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
+    {<T: ?Sized>} &mut T,
+    // SAFETY: `Option<NonNull<T>>` is part of the option layout optimization guarantee:
+    // <https://doc.rust-lang.org/stable/std/option/index.html#representation>.
+    {<T: ?Sized>} NonNull<T>,
     // SAFETY: All zeros is equivalent to `None` (option layout optimization guarantee:
     // <https://doc.rust-lang.org/stable/std/option/index.html#representation>).
-    NonZeroU8, NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU128, NonZeroUsize,
-    NonZeroI8, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI128, NonZeroIsize,
+    NonZero<u8>, NonZero<u16>, NonZero<u32>, NonZero<u64>, NonZero<u128>, NonZero<usize>,
+    NonZero<i8>, NonZero<i16>, NonZero<i32>, NonZero<i64>, NonZero<i128>, NonZero<isize>,
 }
 
 /// This trait allows creating an instance of `Self` which contains exactly one

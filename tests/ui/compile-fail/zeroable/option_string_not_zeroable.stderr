@@ -1,0 +1,23 @@
+error[E0277]: the trait bound `String: ZeroableOption` is not satisfied
+ --> tests/ui/compile-fail/zeroable/option_string_not_zeroable.rs:5:8
+  |
+5 |     x: Option<String>,
+  |        ^^^^^^^^^^^^^^ the trait `ZeroableOption` is not implemented for `String`
+  |
+  = help: the following other types implement trait `ZeroableOption`:
+            &T
+            &mut T
+            Box<T>
+            NonNull<T>
+            NonZero<i128>
+            NonZero<i16>
+            NonZero<i32>
+            NonZero<i64>
+          and $N others
+  = note: required for `Option<String>` to implement `pin_init::Zeroable`
+note: required by a bound in `assert_zeroable`
+ --> tests/ui/compile-fail/zeroable/option_string_not_zeroable.rs:3:10
+  |
+3 | #[derive(Zeroable)]
+  |          ^^^^^^^^ required by this bound in `assert_zeroable`
+  = note: this error originates in the derive macro `Zeroable` (in Nightly builds, run with -Z macro-backtrace for more info)
