@@ -1,5 +1,7 @@
+#![deny(warnings)]
+
 use pin_init::*;
-// use std::marker::{self, PhantomPinned};
+use std::marker::{self, PhantomPinned};
 
 #[pin_data]
 struct Foo {
