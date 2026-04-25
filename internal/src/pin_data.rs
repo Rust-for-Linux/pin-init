@@ -346,45 +346,46 @@ fn generate_the_pin_data(
     // type. If a field is structurally pinned, we create a `Slot` with `Pinned` which must be
     // initialized via `PinInit`; if it is not structurally pinned, then we create a `Slot` with
     // `Unpinned` which allows initialization via `Init`.
-    fn handle_field(
-        Field {
-            vis,
-            ident,
-            ty,
-            attrs,
-            ..
-        }: &Field,
-        pinned: bool,
-    ) -> TokenStream {
-        let ident = ident
-            .as_ref()
-            .expect("only structs with named fields are supported");
-        let pin_marker = if pinned {
-            quote!(Pinned)
-        } else {
-            quote!(Unpinned)
-        };
-        quote! {
-            /// # Safety
-            ///
-            /// - `slot` points to a `#ident` field of a pinned struct that this `__ThePinData` describes.
-            /// - `slot` is a valid, properly aligned and points to uninitialized and exclusively memory.
-            #(#attrs)*
-            #vis unsafe fn #ident(
-                self,
-                slot: *mut #ty,
-            ) -> ::pin_init::__internal::Slot<::pin_init::__internal::#pin_marker, #ty> {
-                // SAFETY:
-                // - If `#pin_marker` is `Pinned`, the corresponding field is structurally pinned.
-                // - Other safety requirements follows the safety requirement.
-                unsafe { ::pin_init::__internal::Slot::new(slot) }
-            }
-        }
-    }
-
     let field_accessors = fields
         .iter()
-        .map(|(pinned, field)| handle_field(field, *pinned))
+        .map(
+            |(
+                pinned,
+                Field {
+                    vis,
+                    ident: field_name,
+                    ty,
+                    attrs,
+                    ..
+                },
+            )| {
+                let field_name = field_name
+                    .as_ref()
+                    .expect("only structs with named fields are supported");
+                let pin_marker = if *pinned {
+                    quote!(Pinned)
+                } else {
+                    quote!(Unpinned)
+                };
+                quote! {
+                    /// # Safety
+                    ///
+                    /// - `slot` is valid and properly aligned.
+                    /// - `(*slot).#field_name` is properly aligned.
+                    /// - `(*slot).#field_name` points to uninitialized and exclusively accessed memory.
+                    #(#attrs)*
+                    #vis unsafe fn #field_name(
+                        self,
+                        slot: *mut #ident #ty_generics,
+                    ) -> ::pin_init::__internal::Slot<::pin_init::__internal::#pin_marker, #ty> {
+                        // SAFETY:
+                        // - If `#pin_marker` is `Pinned`, the corresponding field is structurally pinned.
+                        // - Other safety requirements follows the safety requirement.
+                        unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot).#field_name) }
+                    }
+                }
+            },
+        )
         .collect::<TokenStream>();
     quote! {
         // We declare this struct which will host all of the projection function for our type. It
