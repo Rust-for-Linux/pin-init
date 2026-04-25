@@ -329,6 +329,29 @@ impl<'a, F: FnMut(&'a Lifetime)> Visit<'a> for LifetimeVisitor<'a, F> {
     }
 }
 
+pub(crate) struct ForGenerics<'a>(&'a Generics);
+
+pub(crate) trait GenericsExt {
+    fn for_generics(&self) -> ForGenerics<'_>;
+}
+
+impl GenericsExt for Generics {
+    fn for_generics(&self) -> ForGenerics<'_> {
+        ForGenerics(self)
+    }
+}
+
+impl ToTokens for ForGenerics<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        if self.0.params.is_empty() {
+            return;
+        }
+
+        <Token![for]>::default().to_tokens(tokens);
+        self.0.split_for_impl().1.to_tokens(tokens);
+    }
+}
+
 pub(crate) trait TypeExt {
     fn replace_lifetimes(&self, needle: &[&Lifetime], replacement: &[&Lifetime]) -> Type;
 }
