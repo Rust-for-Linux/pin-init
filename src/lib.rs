@@ -868,7 +868,7 @@ pub use pin_init_internal::init;
 macro_rules! assert_pinned {
     ($ty:ty, $field:ident, $field_ty:ty, inline) => {
         // SAFETY: This code is unreachable.
-        let _ = move |ptr: *mut $field_ty| unsafe {
+        let _ = move |ptr: *mut $ty| unsafe {
             let data = <$ty as $crate::__internal::HasPinData>::__pin_data();
             data.$field(ptr)
                 .init($crate::__internal::AlwaysFail::<$field_ty>::new());
