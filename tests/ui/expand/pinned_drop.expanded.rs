@@ -58,35 +58,35 @@ const _: () = {
         }
         /// # Safety
         ///
-        /// - `slot` points to a `#field_name` field of a pinned struct that this
-        ///   `__ThePinData` describes.
-        /// - `slot` is a valid, properly aligned and points to uninitialized and
-        ///   exclusively accessed memory.
+        /// - `slot` is valid and properly aligned.
+        /// - `(*slot).#field_name` is properly aligned.
+        /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
+        ///   memory.
         #[inline(always)]
         unsafe fn array(
             self,
-            slot: *mut [u8; 1024 * 1024],
+            slot: *mut Foo,
         ) -> ::pin_init::__internal::Slot<
             ::pin_init::__internal::Unpinned,
             [u8; 1024 * 1024],
         > {
-            unsafe { ::pin_init::__internal::Slot::new(slot) }
+            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot).array) }
         }
         /// # Safety
         ///
-        /// - `slot` points to a `#field_name` field of a pinned struct that this
-        ///   `__ThePinData` describes.
-        /// - `slot` is a valid, properly aligned and points to uninitialized and
-        ///   exclusively accessed memory.
+        /// - `slot` is valid and properly aligned.
+        /// - `(*slot).#field_name` is properly aligned.
+        /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
+        ///   memory.
         #[inline(always)]
         unsafe fn _pin(
             self,
-            slot: *mut PhantomPinned,
+            slot: *mut Foo,
         ) -> ::pin_init::__internal::Slot<
             ::pin_init::__internal::Pinned,
             PhantomPinned,
         > {
-            unsafe { ::pin_init::__internal::Slot::new(slot) }
+            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot)._pin) }
         }
     }
     unsafe impl ::pin_init::__internal::HasPinData for Foo {
