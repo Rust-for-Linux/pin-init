@@ -147,7 +147,7 @@ impl<T: ?Sized> AllData<T> {
     #[inline(always)]
     pub fn __make_closure<F, E>(self, f: F) -> F
     where
-        F: FnOnce(*mut T) -> Result<InitOk, E>,
+        F: FnOnce(*mut T, Self) -> Result<InitOk, E>,
     {
         f
     }

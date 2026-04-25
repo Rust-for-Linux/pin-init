@@ -88,6 +88,7 @@ const _: () = {
         where
             __F: FnOnce(
                 *mut Foo<'a, 'b, T, SIZE>,
+                __ThePinData<'a, 'b, T, SIZE>,
             ) -> ::core::result::Result<::pin_init::__internal::InitOk, __E>,
         {
             f

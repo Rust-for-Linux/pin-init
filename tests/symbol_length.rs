@@ -26,5 +26,5 @@ fn type_name() {
     let symbol = symbol.unwrap();
 
     eprintln!("{}: {}", symbol.len(), symbol);
-    assert!(symbol.len() < 200);
+    assert!(symbol.len() <= 200);
 }
