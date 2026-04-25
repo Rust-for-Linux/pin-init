@@ -355,36 +355,24 @@ fn generate_the_pin_data(
             attrs,
             ..
         }: &Field,
-        struct_ident: &Ident,
         pinned: bool,
     ) -> TokenStream {
         let ident = ident
             .as_ref()
             .expect("only structs with named fields are supported");
         let project_ident = format_ident!("__project_{ident}");
-        let (init_ty, init_fn, project_ty, project_body, pin_safety) = if pinned {
+        let (init_ty, init_fn, pin_marker, pin_safety) = if pinned {
             (
                 quote!(PinInit),
                 quote!(__pinned_init),
-                quote!(::core::pin::Pin<&'__slot mut #ty>),
-                // SAFETY: this field is structurally pinned.
-                quote!(unsafe { ::core::pin::Pin::new_unchecked(slot) }),
+                quote!(Pinned),
                 quote!(
                     /// - `slot` will not move until it is dropped, i.e. it will be pinned.
                 ),
             )
         } else {
-            (
-                quote!(Init),
-                quote!(__init),
-                quote!(&'__slot mut #ty),
-                quote!(slot),
-                quote!(),
-            )
+            (quote!(Init), quote!(__init), quote!(Unpinned), quote!())
         };
-        let slot_safety = format!(
-            " `slot` points at the field `{ident}` inside of `{struct_ident}`, which is pinned.",
-        );
         quote! {
             /// # Safety
             ///
@@ -405,20 +393,25 @@ fn generate_the_pin_data(
 
             /// # Safety
             ///
-            #[doc = #slot_safety]
+            /// - `slot` points to a `#ident` field of a pinned struct that this `__ThePinData` describes.
+            /// - `slot` is valid and properly aligned.
+            /// - `*slot` is initialized, and the ownership is transferred to the returned guard.
             #(#attrs)*
-            #vis unsafe fn #project_ident<'__slot>(
+            #vis unsafe fn #project_ident(
                 self,
-                slot: &'__slot mut #ty,
-            ) -> #project_ty {
-                #project_body
+                slot: *mut #ty,
+            ) -> ::pin_init::__internal::DropGuard<::pin_init::__internal::#pin_marker, #ty> {
+                // SAFETY:
+                // - If `#pin_marker` is `Pinned`, the corresponding field is structurally pinned.
+                // - Other safety requirements follows the safety requirement.
+                unsafe { ::pin_init::__internal::DropGuard::new(slot) }
             }
         }
     }
 
     let field_accessors = fields
         .iter()
-        .map(|(pinned, field)| handle_field(field, ident, *pinned))
+        .map(|(pinned, field)| handle_field(field, *pinned))
         .collect::<TokenStream>();
     quote! {
         // We declare this struct which will host all of the projection function for our type. It

@@ -98,12 +98,17 @@ const _: () = {
         }
         /// # Safety
         ///
-        /// `slot` points at the field `array` inside of `Foo`, which is pinned.
-        unsafe fn __project_array<'__slot>(
+        /// - `slot` points to a `#ident` field of a pinned struct that this `__ThePinData` describes.
+        /// - `slot` is valid and properly aligned.
+        /// - `*slot` is initialized, and the ownership is transferred to the returned guard.
+        unsafe fn __project_array(
             self,
-            slot: &'__slot mut [u8; 1024 * 1024],
-        ) -> &'__slot mut [u8; 1024 * 1024] {
-            slot
+            slot: *mut [u8; 1024 * 1024],
+        ) -> ::pin_init::__internal::DropGuard<
+            ::pin_init::__internal::Unpinned,
+            [u8; 1024 * 1024],
+        > {
+            unsafe { ::pin_init::__internal::DropGuard::new(slot) }
         }
         /// # Safety
         ///
@@ -119,12 +124,17 @@ const _: () = {
         }
         /// # Safety
         ///
-        /// `slot` points at the field `r` inside of `Foo`, which is pinned.
-        unsafe fn __project_r<'__slot>(
+        /// - `slot` points to a `#ident` field of a pinned struct that this `__ThePinData` describes.
+        /// - `slot` is valid and properly aligned.
+        /// - `*slot` is initialized, and the ownership is transferred to the returned guard.
+        unsafe fn __project_r(
             self,
-            slot: &'__slot mut &'b mut [&'a mut T; SIZE],
-        ) -> &'__slot mut &'b mut [&'a mut T; SIZE] {
-            slot
+            slot: *mut &'b mut [&'a mut T; SIZE],
+        ) -> ::pin_init::__internal::DropGuard<
+            ::pin_init::__internal::Unpinned,
+            &'b mut [&'a mut T; SIZE],
+        > {
+            unsafe { ::pin_init::__internal::DropGuard::new(slot) }
         }
         /// # Safety
         ///
@@ -141,12 +151,17 @@ const _: () = {
         }
         /// # Safety
         ///
-        /// `slot` points at the field `_pin` inside of `Foo`, which is pinned.
-        unsafe fn __project__pin<'__slot>(
+        /// - `slot` points to a `#ident` field of a pinned struct that this `__ThePinData` describes.
+        /// - `slot` is valid and properly aligned.
+        /// - `*slot` is initialized, and the ownership is transferred to the returned guard.
+        unsafe fn __project__pin(
             self,
-            slot: &'__slot mut PhantomPinned,
-        ) -> ::core::pin::Pin<&'__slot mut PhantomPinned> {
-            unsafe { ::core::pin::Pin::new_unchecked(slot) }
+            slot: *mut PhantomPinned,
+        ) -> ::pin_init::__internal::DropGuard<
+            ::pin_init::__internal::Pinned,
+            PhantomPinned,
+        > {
+            unsafe { ::pin_init::__internal::DropGuard::new(slot) }
         }
     }
     unsafe impl<
