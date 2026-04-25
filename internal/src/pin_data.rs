@@ -479,7 +479,7 @@ fn generate_the_pin_data(
             #[inline(always)]
             #vis fn __make_closure<__F, __E>(self, f: __F) -> __F
             where
-                __F: FnOnce(*mut #struct_name #ty_generics) ->
+                __F: FnOnce(*mut #struct_name #ty_generics, __ThePinData #ty_generics) ->
                     ::core::result::Result<::pin_init::__internal::InitOk, __E>,
             {
                 f
