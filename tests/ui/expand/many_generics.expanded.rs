@@ -13,7 +13,7 @@ where
     _pin: PhantomPinned,
 }
 /// Pin-projections of [`Foo`]
-#[allow(dead_code)]
+#[allow(dead_code, non_snake_case)]
 #[doc(hidden)]
 struct FooProjection<'__pin, 'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
 where
@@ -89,6 +89,7 @@ const _: () = {
         /// - `slot` is a valid pointer to uninitialized memory.
         /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
         ///   to deallocate.
+        #[allow(non_snake_case)]
         unsafe fn array<E>(
             self,
             slot: *mut [u8; 1024 * 1024],
@@ -110,6 +111,7 @@ const _: () = {
         /// - `slot` is a valid pointer to uninitialized memory.
         /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
         ///   to deallocate.
+        #[allow(non_snake_case)]
         unsafe fn r<E>(
             self,
             slot: *mut &'b mut [&'a mut T; SIZE],
@@ -132,6 +134,7 @@ const _: () = {
         /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
         ///   to deallocate.
         /// - `slot` will not move until it is dropped, i.e. it will be pinned.
+        #[allow(non_snake_case)]
         unsafe fn _pin<E>(
             self,
             slot: *mut PhantomPinned,
@@ -176,7 +179,7 @@ const _: () = {
     {
         type Datee = Foo<'a, 'b, T, SIZE>;
     }
-    #[allow(dead_code)]
+    #[allow(dead_code, non_snake_case)]
     struct __Unpin<'__pin, 'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
     where
         T: Bar<'a, 1>,
