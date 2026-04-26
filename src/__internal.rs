@@ -278,6 +278,90 @@ impl<T: ?Sized> Drop for DropGuard<T> {
     }
 }
 
+/// Allows safe (pinned and non-pinned) initialization of an array.
+///
+/// Drops the already initialized elements of the array if an error or panic occurs
+/// partway through the initialization process.
+pub struct ArrayInitGuard<T> {
+    /// A pointer to the first element of the array.
+    ptr: *mut T,
+    /// The length of the array.
+    len: usize,
+    /// The number of initialized elements in the array.
+    num_init: usize,
+}
+
+impl<T> ArrayInitGuard<T> {
+    /// Creates a new [`ArrayInitGuard<T>`] for the array starting at `ptr` with length `len`.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must be a valid pointer to the first element of an array of length `len`. The
+    /// memory must be uninitialized, and it is the caller's responsibility to ensure that:
+    ///   - the elements of the array will only be initialized through this guard,
+    ///   - the elements of the array will not be accessed by any other means until they
+    ///     are initialized, and
+    ///   - the elements of the array will not be dropped by any other means for the entire
+    ///     lifetime of this guard.
+    pub unsafe fn new(ptr: *mut T, len: usize) -> Self {
+        Self {
+            ptr,
+            len,
+            num_init: 0,
+        }
+    }
+
+    /// Initializes the array using the provided closure.
+    pub fn init<I, E>(mut self, mut make_init: impl FnMut(usize) -> I) -> Result<(), E>
+    where
+        I: Init<T, E>,
+    {
+        for i in 0..self.len {
+            let init = make_init(i);
+            // SAFETY: Since `0 <= i < self.len`, `self.ptr.add(i)` is in bounds and valid for
+            // writes by the safety contract of `new`.
+            let ptr = unsafe { self.ptr.add(i) };
+            // SAFETY: The pointer is derived from `self.ptr` and thus satisfies the `__init`
+            // requirements.
+            unsafe { init.__init(ptr) }?;
+            self.num_init += 1;
+        }
+        core::mem::forget(self);
+        Ok(())
+    }
+
+    /// Initializes the array using the provided closure, which is allowed to pin the elements.
+    pub fn pin_init<I, E>(mut self, mut make_init: impl FnMut(usize) -> I) -> Result<(), E>
+    where
+        I: PinInit<T, E>,
+    {
+        for i in 0..self.len {
+            let init = make_init(i);
+            // SAFETY: Since `0 <= i < self.len`, `self.ptr.add(i)` is in bounds and valid for
+            // writes by the safety contract of `new`.
+            let ptr = unsafe { self.ptr.add(i) };
+            // SAFETY: The pointer is derived from `self.ptr` and thus satisfies the `__pinned_init`
+            // requirements.
+            unsafe { init.__pinned_init(ptr) }?;
+            self.num_init += 1;
+        }
+        core::mem::forget(self);
+        Ok(())
+    }
+}
+
+impl<T> Drop for ArrayInitGuard<T> {
+    fn drop(&mut self) {
+        // SAFETY: safety contract of `ArrayInitGuard` guarantees that elements
+        // `self.ptr[0..self.num_init]` are initialized and contain valid `T`
+        // values, so dropping them is safe.
+        unsafe {
+            let slice = core::ptr::slice_from_raw_parts_mut(self.ptr, self.num_init);
+            core::ptr::drop_in_place(slice)
+        };
+    }
+}
+
 /// Token used by `PinnedDrop` to prevent calling the function without creating this unsafely
 /// created struct. This is needed, because the `drop` function is safe, but should not be called
 /// manually.
