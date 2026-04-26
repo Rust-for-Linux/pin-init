@@ -966,12 +966,17 @@ where
     unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), E> {
         // SAFETY: All requirements fulfilled since this function is `__pinned_init`.
         unsafe { self.0.__pinned_init(slot)? };
-        // SAFETY: The above call initialized `slot` and we still have unique access.
+        // SAFETY: The above call initialized `slot`. The guard drops it if `self.1` returns
+        // `Err` or panics.
+        let guard = unsafe { __internal::DropGuard::new(slot) };
+        // SAFETY: `slot` was initialized above. Excluding the guard (which only drops) we
+        // have unique access to it.
         let val = unsafe { &mut *slot };
         // SAFETY: `slot` is considered pinned.
         let val = unsafe { Pin::new_unchecked(val) };
-        // SAFETY: `slot` was initialized above.
-        (self.1)(val).inspect_err(|_| unsafe { core::ptr::drop_in_place(slot) })
+        (self.1)(val)?;
+        core::mem::forget(guard);
+        Ok(())
     }
 }
 
@@ -1073,10 +1078,14 @@ where
     unsafe fn __init(self, slot: *mut T) -> Result<(), E> {
         // SAFETY: All requirements fulfilled since this function is `__init`.
         unsafe { self.0.__pinned_init(slot)? };
-        // SAFETY: The above call initialized `slot` and we still have unique access.
-        (self.1)(unsafe { &mut *slot }).inspect_err(|_|
-            // SAFETY: `slot` was initialized above.
-            unsafe { core::ptr::drop_in_place(slot) })
+        // SAFETY: The above call initialized `slot`. The guard drops it if `self.1` returns
+        // `Err` or panics.
+        let guard = unsafe { __internal::DropGuard::new(slot) };
+        // SAFETY: `slot` was initialized above. Excluding the guard (which only drops) we
+        // have unique access to it.
+        (self.1)(unsafe { &mut *slot })?;
+        core::mem::forget(guard);
+        Ok(())
     }
 }
 
