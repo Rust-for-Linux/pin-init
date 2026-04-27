@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: "7 7 * * *"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 name: CI
 jobs:
   quality:
