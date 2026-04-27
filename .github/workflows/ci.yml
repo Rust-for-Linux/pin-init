@@ -287,10 +287,6 @@ jobs:
             -Dwarnings
   msrv:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        kind: ["check", "test"]
-    name: "msrv/${{matrix.kind}}"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -312,7 +308,7 @@ jobs:
             --exclude-features default \
             --version-range 1.82.. \
             --clean-per-version \
-            ${{matrix.kind}} \
+            test \
             --locked \
             --all-targets
           cargo clean' > exec.sh
