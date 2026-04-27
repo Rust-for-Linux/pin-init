@@ -10,7 +10,8 @@ on:
 
 name: CI
 jobs:
-  fmt:
+  quality:
+    name: Quality Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -21,8 +22,25 @@ jobs:
         with:
           toolchain: nightly
           components: rustfmt
+      - run: sudo apt-get install -y linkchecker
       - run: git config user.name "github-runner" && git config user.email "<>"
-      - run: git rebase --exec 'cargo fmt --check --all' --root
+
+      - name: Signed-off-by Tag Check
+        if: github.event_name == 'pull_request'
+        run: |
+          git rebase --exec \
+            'git log --no-merges -1 --pretty=format:%B | grep -q "^Signed-off-by:"' \
+            --root
+      - name: Format Check
+        run: git rebase --exec 'cargo fmt --check --all' --root
+      - name: Documentation Build and Link Heartbeat Check
+        run: |
+          git rebase --exec \
+            'cargo doc --all-features --no-deps && linkchecker target/doc/*/*.html' \
+            --root
+        env:
+          RUSTFLAGS: "-Dwarnings"
+
   readme:
     runs-on: ubuntu-latest
     steps:
@@ -36,21 +54,7 @@ jobs:
       - run: cargo install cargo-rdme
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo rdme --check' --root
-  docs:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: ${{github.event.pull_request.commits}}
-          ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: nightly
-          components: rust-src
-      - run: git config user.name "github-runner" && git config user.email "<>"
-      - run: git rebase --exec 'cargo doc --all-features --no-deps' --root
-        env:
-          RUSTFLAGS: "-Dwarnings"
+
   clippy:
     runs-on: ubuntu-latest
     steps:
@@ -370,19 +374,6 @@ jobs:
       - run: git rebase --exec 'cargo test --doc --locked' --root
         env:
           RUSTFLAGS: "-Dwarnings"
-  signed-off-by:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: ${{github.event.pull_request.commits}}
-          ref: ${{github.event.pull_request.head.sha}}
-      - run: git config user.name "github-runner" && git config user.email "<>"
-      - run: |
-          git rebase --exec \
-            'git log --no-merges -1 --pretty=format:%B | grep -q "^Signed-off-by:"' \
-            --root
   apply:
     runs-on: ubuntu-latest
     steps:
@@ -415,25 +406,7 @@ jobs:
               fi
               false
           fi
-  link-heartbeat:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: ${{github.event.pull_request.commits}}
-          ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: nightly
-          components: rust-src
-      - run: sudo apt-get install -y linkchecker
-      - run: git config user.name "github-runner" && git config user.email "<>"
-      - run: |
-          git rebase --exec \
-            'cargo doc --all-features --no-deps && linkchecker target/doc/*/*.html' \
-            --root
-        env:
-          RUSTFLAGS: "-Dwarnings"
+
   update:
     runs-on: ubuntu-latest
     steps:
@@ -452,9 +425,8 @@ jobs:
   check-pass:
     if: always()
     needs:
-      - fmt
+      - quality
       - readme
-      - docs
       - clippy
       - ui-tests
       - nightly
@@ -464,9 +436,7 @@ jobs:
       - msrv
       - nightly-msrv
       - os-check
-      - signed-off-by
       - apply
-      - link-heartbeat
       - update
     runs-on: ubuntu-latest
     steps:
