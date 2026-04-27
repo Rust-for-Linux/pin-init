@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
+version = 1
+
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "Rust for Linux Contributors"
+
+[[annotations]]
+path = [
+    "tests/**",
+    ".github/**",
+    "**.md",
+    "flake.lock",
+    "**/Cargo.lock",
+]
+SPDX-License-Identifier = "Apache-2.0 OR MIT"
+SPDX-FileCopyrightText = "Rust for Linux Contributors"

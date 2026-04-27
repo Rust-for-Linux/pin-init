@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 use rustc_version::{version_meta, Channel, Version};
 
 fn main() {
