@@ -447,3 +447,29 @@ jobs:
       - run: cargo test --locked
         env:
           RUSTFLAGS: "-Ddeprecated -Dwarnings"
+
+  # A single job to gate all required jobs.
+  check-pass:
+    if: always()
+    needs:
+      - fmt
+      - readme
+      - docs
+      - clippy
+      - ui-tests
+      - nightly
+      - beta
+      - miri
+      - sanitizers
+      - msrv
+      - nightly-msrv
+      - os-check
+      - signed-off-by
+      - apply
+      - link-heartbeat
+      - update
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check job status
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
