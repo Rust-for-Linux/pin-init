@@ -57,7 +57,9 @@ jobs:
         with:
           toolchain: nightly
           components: clippy
-      - run: cargo install cargo-hack
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
       # examples and tests require `alloc`, since they make extensive use of `Box` etc.
       - run: |
@@ -99,7 +101,9 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
-      - run: cargo install cargo-expand
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo test ui_ --locked --all-targets' --root
         env:
@@ -125,8 +129,9 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
-      - run: cargo install cargo-expand
-      - run: cargo install cargo-hack
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand,cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: |
           echo '#!/bin/bash
@@ -159,8 +164,9 @@ jobs:
         with:
           toolchain: beta
           components: rust-src
-      - run: cargo install cargo-expand
-      - run: cargo install cargo-hack
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand,cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: |
           echo '#!/bin/bash
@@ -197,7 +203,9 @@ jobs:
         with:
           toolchain: ${{env.NIGHTLY}}
           components: miri, rust-src
-      - run: cargo install cargo-expand
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo miri test --locked --all-targets' --root
         env:
@@ -286,7 +294,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
-      - run: cargo install cargo-hack
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: |
           echo '#!/bin/bash
@@ -317,8 +327,9 @@ jobs:
         with:
           toolchain: stable
           components: rust-src
-      - run: cargo install cargo-hack
-      - run: cargo install cargo-expand
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand,cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: |
           echo '#!/bin/bash
@@ -352,7 +363,9 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
-      - run: cargo install cargo-expand
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo test --all-targets --locked' --root
         env:
@@ -402,7 +415,9 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
-      - run: cargo install cargo-expand
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand
       - run: cargo update
       - run: cargo test --locked
         env:
