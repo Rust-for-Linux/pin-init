@@ -23,6 +23,9 @@ jobs:
           toolchain: nightly
           components: rustfmt
       - run: sudo apt-get install -y linkchecker
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-rdme
       - run: git config user.name "github-runner" && git config user.email "<>"
 
       - name: Signed-off-by Tag Check
@@ -40,20 +43,8 @@ jobs:
             --root
         env:
           RUSTFLAGS: "-Dwarnings"
-
-  readme:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: ${{github.event.pull_request.commits}}
-          ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: nightly
-      - run: cargo install cargo-rdme
-      - run: git config user.name "github-runner" && git config user.email "<>"
-      - run: git rebase --exec 'cargo rdme --check' --root
+      - name: README Synchronization Check
+        run: git rebase --exec 'cargo rdme --check' --root
 
   clippy:
     runs-on: ubuntu-latest
@@ -422,7 +413,6 @@ jobs:
     if: always()
     needs:
       - quality
-      - readme
       - clippy
       - ui-tests
       - nightly
