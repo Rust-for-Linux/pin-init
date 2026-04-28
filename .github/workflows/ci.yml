@@ -6,11 +6,16 @@ on:
   pull_request:
   workflow_dispatch:
   schedule:
-    - cron: '7 7 * * *'
+    - cron: "7 7 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 name: CI
 jobs:
-  fmt:
+  quality:
+    name: Quality Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -21,36 +26,30 @@ jobs:
         with:
           toolchain: nightly
           components: rustfmt
+      - run: sudo apt-get install -y linkchecker
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-rdme
       - run: git config user.name "github-runner" && git config user.email "<>"
-      - run: git rebase --exec 'cargo fmt --check --all' --root
-  readme:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: ${{github.event.pull_request.commits}}
-          ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: nightly
-      - run: cargo install cargo-rdme
-      - run: git config user.name "github-runner" && git config user.email "<>"
-      - run: git rebase --exec 'cargo rdme --check' --root
-  docs:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: ${{github.event.pull_request.commits}}
-          ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: nightly
-          components: rust-src
-      - run: git config user.name "github-runner" && git config user.email "<>"
-      - run: git rebase --exec 'cargo doc --all-features --no-deps' --root
+
+      - name: Signed-off-by Tag Check
+        if: github.event_name == 'pull_request'
+        run: |
+          git rebase --exec \
+            'git log --no-merges -1 --pretty=format:%B | grep -q "^Signed-off-by:"' \
+            --root
+      - name: Format Check
+        run: git rebase --exec 'cargo fmt --check --all' --root
+      - name: Documentation Build and Link Heartbeat Check
+        run: |
+          git rebase --exec \
+            'cargo doc --all-features --no-deps && linkchecker target/doc/*/*.html' \
+            --root
         env:
           RUSTFLAGS: "-Dwarnings"
+      - name: README Synchronization Check
+        run: git rebase --exec 'cargo rdme --check' --root
+
   clippy:
     runs-on: ubuntu-latest
     steps:
@@ -62,7 +61,9 @@ jobs:
         with:
           toolchain: nightly
           components: clippy
-      - run: cargo install cargo-hack
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
       # examples and tests require `alloc`, since they make extensive use of `Box` etc.
       - run: |
@@ -104,7 +105,9 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
-      - run: cargo install cargo-expand
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo test ui_ --locked --all-targets' --root
         env:
@@ -130,8 +133,9 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
-      - run: cargo install cargo-expand
-      - run: cargo install cargo-hack
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand,cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: |
           echo '#!/bin/bash
@@ -164,8 +168,9 @@ jobs:
         with:
           toolchain: beta
           components: rust-src
-      - run: cargo install cargo-expand
-      - run: cargo install cargo-hack
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand,cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: |
           echo '#!/bin/bash
@@ -202,7 +207,9 @@ jobs:
         with:
           toolchain: ${{env.NIGHTLY}}
           components: miri, rust-src
-      - run: cargo install cargo-expand
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo miri test --locked --all-targets' --root
         env:
@@ -283,10 +290,6 @@ jobs:
             -Dwarnings
   msrv:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        kind: ["check", "test"]
-    name: "msrv/${{matrix.kind}}"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -295,7 +298,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
-      - run: cargo install cargo-hack
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: |
           echo '#!/bin/bash
@@ -308,7 +313,7 @@ jobs:
             --exclude-features default \
             --version-range 1.82.. \
             --clean-per-version \
-            ${{matrix.kind}} \
+            test \
             --locked \
             --all-targets
           cargo clean' > exec.sh
@@ -326,8 +331,9 @@ jobs:
         with:
           toolchain: stable
           components: rust-src
-      - run: cargo install cargo-hack
-      - run: cargo install cargo-expand
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand,cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: |
           echo '#!/bin/bash
@@ -361,7 +367,9 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
-      - run: cargo install cargo-expand
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo test --all-targets --locked' --root
         env:
@@ -370,19 +378,6 @@ jobs:
       - run: git rebase --exec 'cargo test --doc --locked' --root
         env:
           RUSTFLAGS: "-Dwarnings"
-  signed-off-by:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: ${{github.event.pull_request.commits}}
-          ref: ${{github.event.pull_request.head.sha}}
-      - run: git config user.name "github-runner" && git config user.email "<>"
-      - run: |
-          git rebase --exec \
-            'git log --no-merges -1 --pretty=format:%B | grep -q "^Signed-off-by:"' \
-            --root
   apply:
     runs-on: ubuntu-latest
     steps:
@@ -415,25 +410,7 @@ jobs:
               fi
               false
           fi
-  link-heartbeat:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: ${{github.event.pull_request.commits}}
-          ref: ${{github.event.pull_request.head.sha}}
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: nightly
-          components: rust-src
-      - run: sudo apt-get install -y linkchecker
-      - run: git config user.name "github-runner" && git config user.email "<>"
-      - run: |
-          git rebase --exec \
-            'cargo doc --all-features --no-deps && linkchecker target/doc/*/*.html' \
-            --root
-        env:
-          RUSTFLAGS: "-Dwarnings"
+
   update:
     runs-on: ubuntu-latest
     steps:
@@ -442,7 +419,9 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
-      - run: cargo install cargo-expand
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand
       - run: cargo update
       - run: cargo test --locked
         env:
@@ -452,9 +431,7 @@ jobs:
   check-pass:
     if: always()
     needs:
-      - fmt
-      - readme
-      - docs
+      - quality
       - clippy
       - ui-tests
       - nightly
@@ -464,9 +441,7 @@ jobs:
       - msrv
       - nightly-msrv
       - os-check
-      - signed-off-by
       - apply
-      - link-heartbeat
       - update
     runs-on: ubuntu-latest
     steps:
