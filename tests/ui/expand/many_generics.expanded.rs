@@ -12,44 +12,50 @@ where
     r: &'b mut [&'a mut T; SIZE],
     _pin: PhantomPinned,
 }
-/// Pin-projections of [`Foo`]
-#[allow(dead_code, non_snake_case)]
-#[doc(hidden)]
-struct FooProjection<'__pin, 'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
-where
-    T: Bar<'a, 1>,
-{
-    array: &'__pin mut [u8; 1024 * 1024],
-    r: &'__pin mut &'b mut [&'a mut T; SIZE],
-    _pin: ::core::pin::Pin<&'__pin mut PhantomPinned>,
-    ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut ()>,
-}
-impl<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize> Foo<'a, 'b, T, SIZE>
-where
-    T: Bar<'a, 1>,
-{
-    /// Pin-projects all fields of `Self`.
-    ///
-    /// These fields are structurally pinned:
-    /// - `_pin`
-    ///
-    /// These fields are **not** structurally pinned:
-    /// - `array`
-    /// - `r`
-    #[inline]
-    fn project<'__pin>(
-        self: ::core::pin::Pin<&'__pin mut Self>,
-    ) -> FooProjection<'__pin, 'a, 'b, T, SIZE> {
-        let this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
-        FooProjection {
-            array: &mut this.array,
-            r: &mut this.r,
-            _pin: unsafe { ::core::pin::Pin::new_unchecked(&mut this._pin) },
-            ___pin_phantom_data: ::core::marker::PhantomData,
+const _: () = {
+    /// Pin-projections of [`Foo`]
+    #[allow(dead_code, non_snake_case)]
+    #[doc(hidden)]
+    struct __Projection<
+        '__pin,
+        'a,
+        'b: 'a,
+        T: Bar<'b> + ?Sized + 'a,
+        const SIZE: usize = 0,
+    >
+    where
+        T: Bar<'a, 1>,
+    {
+        array: &'__pin mut [u8; 1024 * 1024],
+        r: &'__pin mut &'b mut [&'a mut T; SIZE],
+        _pin: ::core::pin::Pin<&'__pin mut PhantomPinned>,
+        ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut ()>,
+    }
+    impl<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize> Foo<'a, 'b, T, SIZE>
+    where
+        T: Bar<'a, 1>,
+    {
+        /// Pin-projects all fields of `Self`.
+        ///
+        /// These fields are structurally pinned:
+        /// - `_pin`
+        ///
+        /// These fields are **not** structurally pinned:
+        /// - `array`
+        /// - `r`
+        #[inline]
+        fn project<'__pin>(
+            self: ::core::pin::Pin<&'__pin mut Self>,
+        ) -> __Projection<'__pin, 'a, 'b, T, SIZE> {
+            let this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
+            __Projection {
+                array: &mut this.array,
+                r: &mut this.r,
+                _pin: unsafe { ::core::pin::Pin::new_unchecked(&mut this._pin) },
+                ___pin_phantom_data: ::core::marker::PhantomData,
+            }
         }
     }
-}
-const _: () = {
     #[doc(hidden)]
     struct __ThePinData<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
     where
