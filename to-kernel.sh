@@ -61,13 +61,11 @@ head=$(git rev-parse HEAD)
 git am                                              \
     --signoff                                       \
     --directory="rust/pin-init"                     \
+    --exclude="**/LICENSE*"                         \
     --exclude="rust/pin-init/.mailmap"              \
     --exclude="rust/pin-init/.gitignore"            \
     --exclude="rust/pin-init/to-kernel.sh"          \
     --exclude="rust/pin-init/from-kernel.sh"        \
-    --exclude="rust/pin-init/LICENSE-APACHE"        \
-    --exclude="rust/pin-init/LICENSE-MIT"           \
-    --exclude="rust/pin-init/LICENSES/*"            \
     --exclude="rust/pin-init/CHANGELOG.md"          \
     --exclude="rust/pin-init/flake.nix"             \
     --exclude="rust/pin-init/flake.lock"            \
