@@ -22,12 +22,6 @@ fn main() {
         | -> ::core::result::Result<(), ::core::convert::Infallible> {
             init(slot).map(|__InitOk| ())
         };
-        let init = unsafe {
-            ::pin_init::init_from_closure::<_, ::core::convert::Infallible>(init)
-        };
-        #[allow(
-            clippy::let_and_return,
-            reason = "some clippy versions warn about the let binding"
-        )] init
+        unsafe { ::pin_init::init_from_closure::<_, ::core::convert::Infallible>(init) }
     };
 }
