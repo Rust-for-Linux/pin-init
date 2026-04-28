@@ -116,10 +116,10 @@ pub(crate) fn pin_data(
 
     Ok(quote! {
         #struct_
-        #projections
         // We put the rest into this const item, because it then will not be accessible to anything
         // outside.
         const _: () = {
+            #projections
             #the_pin_data
             #unpin_impl
             #drop_impl
@@ -256,7 +256,6 @@ fn generate_projections(
     let mut generics_with_pin_lt = generics.clone();
     generics_with_pin_lt.params.insert(0, parse_quote!('__pin));
     let (_, ty_generics_with_pin_lt, whr) = generics_with_pin_lt.split_for_impl();
-    let projection = format_ident!("{ident}Projection");
     let this = format_ident!("this");
 
     let (fields_decl, fields_proj): (Vec<_>, Vec<_>) = fields
@@ -316,7 +315,7 @@ fn generate_projections(
         // the struct definition.
         #[allow(dead_code, non_snake_case)]
         #[doc(hidden)]
-        #vis struct #projection #generics_with_pin_lt
+        #vis struct __Projection #generics_with_pin_lt
             #whr
         {
             #(#fields_decl)*
@@ -336,10 +335,10 @@ fn generate_projections(
             #[inline]
             #vis fn project<'__pin>(
                 self: ::core::pin::Pin<&'__pin mut Self>,
-            ) -> #projection #ty_generics_with_pin_lt {
+            ) -> __Projection #ty_generics_with_pin_lt {
                 // SAFETY: we only give access to `&mut` for fields not structurally pinned.
                 let #this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
-                #projection {
+                __Projection {
                     #(#fields_proj)*
                     ___pin_phantom_data: ::core::marker::PhantomData,
                 }
