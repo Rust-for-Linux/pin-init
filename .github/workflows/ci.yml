@@ -22,6 +22,10 @@ jobs:
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
+      # Packages in ubuntu-latest can be old. Use nix to source newer tools.
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ github.token }}
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: nightly
@@ -38,6 +42,8 @@ jobs:
           git rebase --exec \
             'git log --no-merges -1 --pretty=format:%B | grep -q "^Signed-off-by:"' \
             --root
+      - name: License Header Check
+        run: git rebase --exec 'nix run nixpkgs#reuse lint' --root
       - name: Format Check
         run: git rebase --exec 'cargo fmt --check --all' --root
       - name: Documentation Build and Link Heartbeat Check

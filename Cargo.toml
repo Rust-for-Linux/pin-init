@@ -1,13 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
 [package]
 name = "pin-init"
 version = "0.3.0"
 edition = "2021"
 rust-version = "1.82"
 
-authors = [
-    "Benno Lossin <lossin@kernel.org>",
-    "Gary Guo <gary@garyguo.net>",
-]
 license = "MIT OR Apache-2.0"
 description = "Library to facilitate safe pinned initialization"
 readme = "README.md"

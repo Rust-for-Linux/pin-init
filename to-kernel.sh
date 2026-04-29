@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 
 set -e
 
@@ -61,15 +62,18 @@ git am                                              \
     --signoff                                       \
     --directory="rust/pin-init"                     \
     --exclude="rust/pin-init/.mailmap"              \
+    --exclude="rust/pin-init/.gitignore"            \
     --exclude="rust/pin-init/to-kernel.sh"          \
     --exclude="rust/pin-init/from-kernel.sh"        \
     --exclude="rust/pin-init/LICENSE-APACHE"        \
     --exclude="rust/pin-init/LICENSE-MIT"           \
+    --exclude="rust/pin-init/LICENSES/*"            \
     --exclude="rust/pin-init/CHANGELOG.md"          \
     --exclude="rust/pin-init/flake.nix"             \
     --exclude="rust/pin-init/flake.lock"            \
     --exclude="rust/pin-init/Cargo.toml"            \
     --exclude="rust/pin-init/Cargo.lock"            \
+    --exclude="rust/pin-init/REUSE.toml"            \
     --exclude="rust/pin-init/justfile"              \
     --exclude="rust/pin-init/build.rs"              \
     --exclude="rust/pin-init/.clippy.toml"          \
