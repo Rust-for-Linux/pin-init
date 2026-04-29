@@ -5,7 +5,6 @@ name = "pin-init-internal"
 version = "0.3.0"
 edition = "2021"
 
-authors = ["y86-dev"]
 license = "MIT OR Apache-2.0"
 description = "Proc macros for the pin-init crate."
 
