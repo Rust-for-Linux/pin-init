@@ -79,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "pin-init"
-version = "0.0.10"
+version = "0.3.0"
 dependencies = [
  "libc",
  "macrotest",
@@ -90,7 +90,7 @@ dependencies = [
 
 [[package]]
 name = "pin-init-internal"
-version = "0.0.6"
+version = "0.3.0"
 dependencies = [
  "proc-macro2",
  "quote",

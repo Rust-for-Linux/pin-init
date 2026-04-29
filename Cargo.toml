@@ -1,6 +1,6 @@
 [package]
 name = "pin-init"
-version = "0.0.10"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.82"
 
@@ -18,7 +18,7 @@ keywords = ["safe", "pin", "init", "no-std", "rust-patterns"]
 categories = ["no-std", "rust-patterns", "embedded"]
 
 [dependencies]
-pin-init-internal = { path = "./internal", version = "=0.0.6" }
+pin-init-internal = { path = "./internal", version = "=0.3.0" }
 
 [features]
 default = ["std", "alloc"]
