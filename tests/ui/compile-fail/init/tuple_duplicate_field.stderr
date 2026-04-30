@@ -1,0 +1,8 @@
+error[E0062]: field `0` specified more than once
+ --> tests/ui/compile-fail/init/tuple_duplicate_field.rs:7:37
+  |
+7 |     let _ = pin_init!(Tuple { 0: 1, 0: 2, 1: 3 });
+  |             ------------------------^------------
+  |             |                       |
+  |             |                       used more than once
+  |             first use of `0`

@@ -1,0 +1,33 @@
+error[E0609]: no field `2` on type `Tuple`
+ --> tests/ui/compile-fail/init/tuple_invalid_field.rs:7:43
+  |
+7 |     let _ = pin_init!(Tuple { 0: 1, 1: 2, 2: 3 });
+  |                                           ^ unknown field
+  |
+  = note: available fields are: `0`, `1`
+
+error[E0599]: no method named `__project_2` found for struct `__ThePinData` in the current scope
+ --> tests/ui/compile-fail/init/tuple_invalid_field.rs:7:13
+  |
+3 | #[pin_data]
+  | ----------- method `__project_2` not found for this struct
+...
+7 |     let _ = pin_init!(Tuple { 0: 1, 1: 2, 2: 3 });
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `pin_init` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0560]: struct `Tuple` has no field named `2`
+ --> tests/ui/compile-fail/init/tuple_invalid_field.rs:7:43
+  |
+4 | struct Tuple(#[pin] i32, i32);
+  |        ----- `Tuple` defined here
+...
+7 |     let _ = pin_init!(Tuple { 0: 1, 1: 2, 2: 3 });
+  |                                           ^ field does not exist
+  |
+help: `Tuple` is a tuple struct, use the appropriate syntax
+  |
+7 -     let _ = pin_init!(Tuple { 0: 1, 1: 2, 2: 3 });
+7 +     let _ = Tuple(/* i32 */, /* i32 */);
+  |
