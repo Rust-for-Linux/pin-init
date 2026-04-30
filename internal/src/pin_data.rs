@@ -1,16 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use proc_macro2::TokenStream;
+use std::collections::{BTreeMap, BTreeSet};
+
+use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse::{End, Nothing, Parse},
     parse_quote, parse_quote_spanned,
+    punctuated::Punctuated,
     spanned::Spanned,
     visit_mut::VisitMut,
-    Field, Fields, Generics, Ident, Item, PathSegment, Type, TypePath, Visibility, WhereClause,
+    Attribute, Field, Fields, Generics, Ident, Item, Lifetime, PathSegment, Token, Type, TypePath,
+    Visibility, WhereClause,
 };
 
-use crate::diagnostics::{DiagCtxt, ErrorGuaranteed};
+use crate::{
+    diagnostics::{DiagCtxt, ErrorGuaranteed},
+    util::TypeExt,
+};
 
 pub(crate) mod kw {
     syn::custom_keyword!(PinnedDrop);
@@ -44,9 +51,68 @@ impl ToTokens for Args {
     }
 }
 
+/// Annotation that a field is referenced.
+struct Borrow {
+    mutable: Option<Token![mut]>,
+    /// Name of the field that this lifetime can reference.
+    field: Ident,
+}
+
+impl Parse for Borrow {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        Ok(Borrow {
+            mutable: input.parse()?,
+            field: input.parse()?,
+        })
+    }
+}
+
+#[expect(unused)]
+enum Variance {
+    Covariant(Span),
+    NotCovariant(Span),
+}
+
+impl Variance {
+    fn parse(dcx: &mut DiagCtxt, attrs: &mut Vec<Attribute>, span: Span) -> Self {
+        let mut attrs = attrs.extract_if(.., |attr| {
+            attr.path().is_ident("covariant") || attr.path().is_ident("not_covariant")
+        });
+
+        let result = match attrs.next() {
+            None => {
+                // By default, infer covariance.
+                Variance::Covariant(span)
+            }
+            Some(attr) => {
+                if attr.path().is_ident("covariant") {
+                    Variance::Covariant(attr.path().span())
+                } else {
+                    Variance::NotCovariant(attr.path().span())
+                }
+            }
+        };
+
+        // Emit error on redundant specifications.
+        for attr in attrs {
+            dcx.error(attr.path(), "variance marker can only be specified once");
+        }
+
+        result
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum Borrowed {
+    Shared,
+    Mutable,
+}
+
 struct FieldInfo<'a> {
     field: &'a Field,
     pinned: bool,
+    borrowed: Option<Borrowed>,
+    variance: Option<Variance>,
 }
 
 pub(crate) fn pin_data(
@@ -132,7 +198,14 @@ pub(crate) fn pin_data(
     replacer.visit_generics_mut(&mut struct_.generics);
     replacer.visit_fields_mut(&mut struct_.fields);
 
-    let fields: Vec<FieldInfo<'_>> = struct_
+    // Collect all bound lifetimes from generics.
+    let bound_lifetimes: BTreeSet<&Lifetime> =
+        struct_.generics.lifetimes().map(|x| &x.lifetime).collect();
+
+    // Keep track on how fields are borrowed and where.
+    let mut borrow_info = BTreeMap::<_, (bool, Vec<Span>)>::new();
+
+    let mut fields: Vec<FieldInfo<'_>> = struct_
         .fields
         .iter_mut()
         .map(|field| {
@@ -143,6 +216,60 @@ pub(crate) fn pin_data(
                 dcx.error(&field, "#[pin] attribute specified more than once");
             }
 
+            let ident = field.ident.as_ref().unwrap();
+
+            // Parse `#[covariant]` and `#[not_covariant]` markers.
+            let variance = Variance::parse(dcx, &mut field.attrs, ident.span());
+
+            // Parse `#[borrows]` attribute or infer it from the type.
+            let borrows: Punctuated<Borrow, Token![,]> = field
+                .attrs
+                .extract_if(.., |attr| attr.path().is_ident("borrows"))
+                .filter_map(
+                    |attr| match attr.parse_args_with(Punctuated::parse_terminated) {
+                        Ok(v) => Some(v),
+                        Err(err) => {
+                            dcx.error(attr, err);
+                            None
+                        }
+                    },
+                )
+                .next()
+                .unwrap_or_else(|| {
+                    // If no annotations are attached, infer lifetime based on the field referenced,
+                    // although bound lifetimes from struct generics should take priority.
+                    //
+                    // For example,
+                    // ```
+                    // struct Foo<'a> {
+                    //     bar: &'a (),
+                    //     a: u32,
+                    // }
+                    // ```
+                    // would not be inferred as self-referential because `'a` is already bound by the
+                    // struct generics.
+                    //
+                    // Note that we cannot reliably determine what type of borrow is needed on fields.
+                    // More commonly a shared borrow is required, so it is inferred as such. Mutable
+                    // borrow would require explicit user annotation.
+                    field
+                        .ty
+                        .unbound_lifetimes()
+                        .difference(&bound_lifetimes)
+                        .map(|&lt| Borrow {
+                            mutable: None,
+                            field: lt.ident.clone(),
+                        })
+                        .collect()
+                });
+
+            // Update borrow information.
+            for borrow in borrows.iter() {
+                let entry = borrow_info.entry(borrow.field.clone()).or_default();
+                entry.0 |= borrow.mutable.is_some();
+                entry.1.push(borrow.field.span());
+            }
+
             assert!(
                 !field.attrs.iter().any(|a| a.path().is_ident("cfg")),
                 "cfgs should be all resolved at this point"
@@ -151,21 +278,57 @@ pub(crate) fn pin_data(
             FieldInfo {
                 field: &*field,
                 pinned: pinned_count != 0,
+                borrowed: None,
+                variance: if borrows.is_empty() {
+                    None
+                } else {
+                    Some(variance)
+                },
             }
         })
         .collect();
 
-    for field in &fields {
+    for field in fields.iter_mut() {
         let ident = field.field.ident.as_ref().unwrap();
 
         if !field.pinned && is_phantom_pinned(&field.field.ty) {
             dcx.warn(
                 field.field,
                 format!(
-                    "The field `{ident}` of type `PhantomPinned` only has an effect \
+                    "The field `{}` of type `PhantomPinned` only has an effect \
                     if it has the `#[pin]` attribute",
+                    ident,
                 ),
             );
+        }
+
+        // Update `borrowed` now we have all borrow information recorded.
+        // This is not `remove()` because fields might be `#[cfg]` on so identifier names are not unique.
+        if let Some((mutable, users)) = borrow_info.get_mut(ident) {
+            field.borrowed = Some(if *mutable {
+                Borrowed::Mutable
+            } else {
+                Borrowed::Shared
+            });
+
+            users.clear();
+        }
+    }
+
+    // For any residual users in `borrow_info`, the lifetime mention is invalid and report as such.
+    for (name, (_, users)) in borrow_info {
+        for user in users {
+            dcx.error(
+                user,
+                format!("`{name}` is neither a lifetime in generics nor a field name"),
+            );
+        }
+    }
+
+    // Reject self-referential structs.
+    for f in &fields {
+        if f.variance.is_some() {
+            dcx.error(f.field, "self-referential support is not fully implemented");
         }
     }
 
@@ -326,6 +489,7 @@ fn generate_projections(
 
     let (fields_decl, fields_proj): (Vec<_>, Vec<_>) = fields
         .iter()
+        .filter(|f| f.borrowed.is_none() && f.variance.is_none())
         .map(|field| {
             let Field { vis, ident, ty, .. } = &field.field;
 
@@ -415,6 +579,7 @@ fn generate_the_pin_data(
     // `Unpinned` which allows initialization via `Init`.
     let field_accessors = fields
         .iter()
+        .filter(|f| f.borrowed.is_none() && f.variance.is_none())
         .map(|f| {
             let Field { vis, ident, ty, .. } = f.field;
 

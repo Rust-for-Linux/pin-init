@@ -1,0 +1,63 @@
+error: variance marker can only be specified once
+ --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:6:7
+  |
+6 |     #[not_covariant] // Duplicate variance attribute
+  |       ^^^^^^^^^^^^^
+
+error: `non_exist` is neither a lifetime in generics nor a field name
+ --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:7:15
+  |
+7 |     #[borrows(non_exist, mut non_exist_mut)] // Borrows non-existent fields
+  |               ^^^^^^^^^
+
+error: `non_exist` is neither a lifetime in generics nor a field name
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:10:16
+   |
+10 |     implicit: &'non_exist u32,
+   |                ^^^^^^^^^^
+
+error: `non_exist_mut` is neither a lifetime in generics nor a field name
+ --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:7:30
+  |
+7 |     #[borrows(non_exist, mut non_exist_mut)] // Borrows non-existent fields
+  |                              ^^^^^^^^^^^^^
+
+error: self-referential support is not fully implemented
+ --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:8:5
+  |
+8 |     explicit: u32,
+  |     ^^^^^^^^^^^^^
+
+error: self-referential support is not fully implemented
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:10:5
+   |
+10 |     implicit: &'non_exist u32,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: self-referential support is not fully implemented
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:13:5
+   |
+13 |     okay: &'b u32,
+   |     ^^^^^^^^^^^^^
+
+error[E0261]: use of undeclared lifetime name `'non_exist`
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:10:16
+   |
+10 |     implicit: &'non_exist u32,
+   |                ^^^^^^^^^^ undeclared lifetime
+   |
+help: consider introducing lifetime `'non_exist` here
+   |
+ 4 | struct InvalidAttr<'non_exist, 'a> {
+   |                    +++++++++++
+
+error[E0261]: use of undeclared lifetime name `'b`
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:13:12
+   |
+13 |     okay: &'b u32,
+   |            ^^ undeclared lifetime
+   |
+help: consider introducing lifetime `'b` here
+   |
+ 4 | struct InvalidAttr<'b, 'a> {
+   |                    +++
