@@ -1,23 +1,34 @@
-error: The field `pin1` of type `PhantomPinned` only has an effect if it has the `#[pin]` attribute
- --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:6:5
-  |
-6 |     pin1: PhantomPinned,
-  |     ^^^^^^^^^^^^^^^^^^^
-
-error: The field `pin2` of type `PhantomPinned` only has an effect if it has the `#[pin]` attribute
- --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:7:5
-  |
-7 |     pin2: marker::PhantomPinned,
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-error: The field `pin3` of type `PhantomPinned` only has an effect if it has the `#[pin]` attribute
+error: use of deprecated function `_::warn`:
+       The field `pin1` of type `PhantomPinned` only has an effect if it has the `#[pin]` attribute
  --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:8:5
   |
-8 |     pin3: core::marker::PhantomPinned,
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+8 |     pin1: PhantomPinned,
+  |     ^^^^^^^^^^^^^^^^^^^
+  |
+note: the lint level is defined here
+ --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:1:9
+  |
+1 | #![deny(warnings)]
+  |         ^^^^^^^^
+  = note: `#[deny(deprecated)]` implied by `#[deny(warnings)]`
 
-error: The field `pin4` of type `PhantomPinned` only has an effect if it has the `#[pin]` attribute
+error: use of deprecated function `_::warn`:
+       The field `pin2` of type `PhantomPinned` only has an effect if it has the `#[pin]` attribute
  --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:9:5
   |
-9 |     pin4: ::core::marker::PhantomPinned,
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+9 |     pin2: marker::PhantomPinned,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: use of deprecated function `_::warn`:
+       The field `pin3` of type `PhantomPinned` only has an effect if it has the `#[pin]` attribute
+  --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:10:5
+   |
+10 |     pin3: core::marker::PhantomPinned,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: use of deprecated function `_::warn`:
+       The field `pin4` of type `PhantomPinned` only has an effect if it has the `#[pin]` attribute
+  --> tests/ui/compile-fail/pin_data/no_pin_on_phantompinned.rs:11:5
+   |
+11 |     pin4: ::core::marker::PhantomPinned,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
