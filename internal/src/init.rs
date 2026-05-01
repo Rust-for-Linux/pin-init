@@ -240,13 +240,26 @@ fn init_fields(
         };
         let init = match kind {
             InitializerKind::Value { ident, value } => {
-                let mut value_ident = ident.clone();
-                let value_prep = value.as_ref().map(|value| &value.1).map(|value| {
-                    // Setting the span of `value_ident` to `value`'s span improves error messages
-                    // when the type of `value` is wrong.
-                    value_ident.set_span(value.span());
-                    quote!(let #value_ident = #value;)
-                });
+                let (value_prep, value_ident) = match value.as_ref() {
+                    None => {
+                        // This is of short-hand syntax, so just use the identifier directly.
+                        (None, ident.clone())
+                    }
+                    Some((_, value)) => {
+                        // We have an expression. Evaluate it to a local variable first, outside
+                        // `unsafe {}` block.
+                        //
+                        // Setting the span of `value_ident` to `value`'s span improves error messages
+                        // when the type of `value` is wrong.
+                        let value_ident = format_ident!("value", span = value.span());
+                        (
+                            Some(quote! {
+                                let #value_ident = #value;
+                            }),
+                            value_ident,
+                        )
+                    }
+                };
                 // Again span for better diagnostics
                 let write = quote_spanned!(ident.span()=> ::core::ptr::write);
                 quote! {
@@ -333,7 +346,9 @@ fn init_fields(
                 };
 
                 #(#cfgs)*
-                #[allow(unused_variables)]
+                // Allow `non_snake_case` since the same warning is going to be reported for
+                // the struct field.
+                #[allow(unused_variables, non_snake_case)]
                 let #ident = #accessor;
             });
             guards.push(guard);
