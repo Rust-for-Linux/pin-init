@@ -2,8 +2,11 @@
 
 use std::collections::BTreeSet;
 
+use proc_macro2::Span;
+use syn::punctuated::Punctuated;
 use syn::visit::Visit;
 use syn::GenericParam;
+use syn::{BoundLifetimes, Ident, LifetimeParam};
 use syn::{Lifetime, Type};
 
 pub(crate) trait TypeExt {
@@ -57,5 +60,68 @@ impl TypeExt for Type {
         };
         visitor.visit_type(self);
         visitor.bound
+    }
+}
+
+pub(crate) struct Binder<T> {
+    pub bound: Vec<Lifetime>,
+    pub value: T,
+}
+
+impl<T> Binder<T> {
+    pub(crate) fn new(bound: Vec<Lifetime>, value: T) -> Self {
+        Binder { bound, value }
+    }
+
+    /// Obtain a `for<...>` that can be used to construct a higher-ranked trait bound.
+    #[expect(unused)]
+    pub fn for_bound(&self) -> BoundLifetimes {
+        BoundLifetimes {
+            for_token: Default::default(),
+            lt_token: Default::default(),
+            lifetimes: self
+                .bound
+                .iter()
+                .map(|lt| GenericParam::Lifetime(LifetimeParam::new(lt.clone())))
+                .collect(),
+            gt_token: Default::default(),
+        }
+    }
+
+    /// Similar to `for_bound`, but the number of lifetimes is padded to 4.
+    pub(crate) fn for_bound_4(&self) -> BoundLifetimes {
+        let mut lifetimes: Punctuated<_, _> = self
+            .bound
+            .iter()
+            .map(|lt| GenericParam::Lifetime(LifetimeParam::new(lt.clone())))
+            .collect();
+        while lifetimes.len() < 4 {
+            lifetimes.push(GenericParam::Lifetime(LifetimeParam::new(Lifetime::new(
+                &format!("'__lt{}", lifetimes.len()),
+                Span::mixed_site(),
+            ))));
+        }
+        BoundLifetimes {
+            for_token: Default::default(),
+            lt_token: Default::default(),
+            lifetimes,
+            gt_token: Default::default(),
+        }
+    }
+}
+
+pub(crate) trait LifetimeExt {
+    /// Obtain a lifetime from a identifier.
+    ///
+    /// The created lifetime has the same span.
+    fn from_ident(ident: &Ident) -> Self;
+}
+
+impl LifetimeExt for Lifetime {
+    fn from_ident(ident: &Ident) -> Self {
+        Lifetime {
+            apostrophe: ident.span(),
+            ident: ident.clone(),
+        }
     }
 }

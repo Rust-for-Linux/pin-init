@@ -1,0 +1,57 @@
+error: self-referential support is not fully implemented
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:18:5
+   |
+18 |     lt_spec: LtSpec<'a>,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+error: self-referential support is not fully implemented
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:24:5
+   |
+24 |     lt_spec2: LtSpec2<'a, 'b>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: implementation of `Send` is not general enough
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:34:5
+   |
+34 |     assert_send::<Foo>();
+   |     ^^^^^^^^^^^^^^^^^^^^ implementation of `Send` is not general enough
+   |
+   = note: `LtSpec<'0>` must implement `Send`, for any lifetime `'0`...
+   = note: ...but `Send` is actually implemented for the type `LtSpec<'static>`
+
+error: implementation of `Sync` is not general enough
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:35:5
+   |
+35 |     assert_sync::<Foo>();
+   |     ^^^^^^^^^^^^^^^^^^^^ implementation of `Sync` is not general enough
+   |
+   = note: `LtSpec<'0>` must implement `Sync`, for any lifetime `'0`...
+   = note: ...but `Sync` is actually implemented for the type `LtSpec<'static>`
+
+error[E0308]: mismatched types
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:36:5
+   |
+36 |     assert_send::<Bar>();
+   |     ^^^^^^^^^^^^^^^^^^^^ one type is more general than the other
+   |
+   = note: expected associated type `<(dyn for<'a, 'b, '__lt2, '__lt3> pin_init::__internal::WithLt4<'a, 'b, '__lt2, '__lt3, Of = LtSpec2<'a, 'b>> + 'static) as pin_init::__internal::WithLt4<'_, '_, '_, '_>>::Of`
+              found associated type `<(dyn for<'a, 'b, '__lt2, '__lt3> pin_init::__internal::WithLt4<'a, 'b, '__lt2, '__lt3, Of = LtSpec2<'a, 'b>> + 'static) as pin_init::__internal::WithLt4<'a, 'b, 'c, 'd>>::Of`
+note: the lifetime requirement is introduced here
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:29:19
+   |
+29 | fn assert_send<T: Send>() {}
+   |                   ^^^^
+
+error[E0308]: mismatched types
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:37:5
+   |
+37 |     assert_sync::<Bar>();
+   |     ^^^^^^^^^^^^^^^^^^^^ one type is more general than the other
+   |
+   = note: expected associated type `<(dyn for<'a, 'b, '__lt2, '__lt3> pin_init::__internal::WithLt4<'a, 'b, '__lt2, '__lt3, Of = LtSpec2<'a, 'b>> + 'static) as pin_init::__internal::WithLt4<'_, '_, '_, '_>>::Of`
+              found associated type `<(dyn for<'a, 'b, '__lt2, '__lt3> pin_init::__internal::WithLt4<'a, 'b, '__lt2, '__lt3, Of = LtSpec2<'a, 'b>> + 'static) as pin_init::__internal::WithLt4<'a, 'b, 'c, 'd>>::Of`
+note: the lifetime requirement is introduced here
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:30:19
+   |
+30 | fn assert_sync<T: Sync>() {}
+   |                   ^^^^

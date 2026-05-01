@@ -10,13 +10,13 @@ use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
     visit_mut::VisitMut,
-    Attribute, Field, Fields, Generics, Ident, Item, Lifetime, PathSegment, Token, Type, TypePath,
-    Visibility, WhereClause,
+    Attribute, Field, Fields, Generics, Ident, Item, ItemStruct, Lifetime, PathSegment, Token,
+    Type, TypePath, Visibility, WhereClause,
 };
 
 use crate::{
     diagnostics::{DiagCtxt, ErrorGuaranteed},
-    util::TypeExt,
+    util::{Binder, LifetimeExt, TypeExt},
 };
 
 pub(crate) mod kw {
@@ -113,6 +113,7 @@ struct FieldInfo<'a> {
     pinned: bool,
     borrowed: Option<Borrowed>,
     variance: Option<Variance>,
+    ty: Binder<Type>,
 }
 
 pub(crate) fn pin_data(
@@ -198,6 +199,10 @@ pub(crate) fn pin_data(
     replacer.visit_generics_mut(&mut struct_.generics);
     replacer.visit_fields_mut(&mut struct_.fields);
 
+    // Move `fields` out from the struct.
+    let mut fields = struct_.fields;
+    struct_.fields = Fields::Unit;
+
     // Collect all bound lifetimes from generics.
     let bound_lifetimes: BTreeSet<&Lifetime> =
         struct_.generics.lifetimes().map(|x| &x.lifetime).collect();
@@ -205,8 +210,7 @@ pub(crate) fn pin_data(
     // Keep track on how fields are borrowed and where.
     let mut borrow_info = BTreeMap::<_, (bool, Vec<Span>)>::new();
 
-    let mut fields: Vec<FieldInfo<'_>> = struct_
-        .fields
+    let mut fields: Vec<FieldInfo<'_>> = fields
         .iter_mut()
         .map(|field| {
             let len = field.attrs.len();
@@ -215,6 +219,11 @@ pub(crate) fn pin_data(
             if pinned_count > 1 {
                 dcx.error(&field, "#[pin] attribute specified more than once");
             }
+
+            assert!(
+                !field.attrs.iter().any(|a| a.path().is_ident("cfg")),
+                "cfgs should be all resolved at this point"
+            );
 
             let ident = field.ident.as_ref().unwrap();
 
@@ -270,9 +279,12 @@ pub(crate) fn pin_data(
                 entry.1.push(borrow.field.span());
             }
 
-            assert!(
-                !field.attrs.iter().any(|a| a.path().is_ident("cfg")),
-                "cfgs should be all resolved at this point"
+            let ty = Binder::new(
+                borrows
+                    .iter()
+                    .map(|field_ref| Lifetime::from_ident(&field_ref.field))
+                    .collect(),
+                field.ty.clone(),
             );
 
             FieldInfo {
@@ -284,6 +296,7 @@ pub(crate) fn pin_data(
                 } else {
                     Some(variance)
                 },
+                ty,
             }
         })
         .collect();
@@ -313,6 +326,15 @@ pub(crate) fn pin_data(
 
             users.clear();
         }
+
+        // We have a limitation of up to 4 referenced lifetime in a type.
+        // See `ForLt4` and `SelfRef` in `__internal.rs` on why this limitation exists.
+        if field.ty.bound.len() > 4 {
+            dcx.error(
+                &field.ty.bound[4],
+                "at most 4 lifetimes can be referenced from a struct at a time",
+            );
+        }
     }
 
     // For any residual users in `borrow_info`, the lifetime mention is invalid and report as such.
@@ -332,6 +354,7 @@ pub(crate) fn pin_data(
         }
     }
 
+    let struct_def = generate_struct_def(&struct_, &fields);
     let unpin_impl = generate_unpin_impl(&struct_.ident, &struct_.generics, &fields);
     let drop_impl = generate_drop_impl(&struct_.ident, &struct_.generics, args);
     let projections =
@@ -340,7 +363,7 @@ pub(crate) fn pin_data(
         generate_the_pin_data(&struct_.vis, &struct_.ident, &struct_.generics, &fields);
 
     Ok(quote! {
-        #struct_
+        #struct_def
         // We put the rest into this const item, because it then will not be accessible to anything
         // outside.
         const _: () = {
@@ -376,6 +399,59 @@ fn is_phantom_pinned(ty: &Type) -> bool {
     }
 }
 
+fn generate_struct_def(
+    ItemStruct {
+        attrs,
+        vis,
+        struct_token,
+        ident,
+        generics,
+        fields: _,
+        semi_token,
+    }: &ItemStruct,
+    fields: &[FieldInfo<'_>],
+) -> TokenStream {
+    let mut generated_fields = Vec::new();
+
+    for field in fields {
+        let Field {
+            attrs,
+            vis,
+            mutability: _,
+            ident,
+            colon_token,
+            ty: _,
+        } = &field.field;
+
+        let mut ty = field.ty.value.to_token_stream();
+
+        if field.variance.is_some() {
+            let bound = field.ty.for_bound_4();
+            let bound_lt = bound.lifetimes.iter();
+            ty = parse_quote!(::pin_init::__internal::SelfRef<
+                ::pin_init::__internal::ForLtImpl<
+                    dyn #bound ::pin_init::__internal::WithLt4<#(#bound_lt,)* Of = #ty>
+                >
+            >);
+        };
+
+        generated_fields.push(quote! {
+           #(#attrs)* #vis #ident #colon_token #ty
+        });
+    }
+
+    let whr = &generics.where_clause;
+
+    quote!(
+        #(#attrs)*
+        #vis
+        #struct_token #ident #generics #whr {
+            #(#generated_fields,)*
+        }
+        #semi_token
+    )
+}
+
 fn generate_unpin_impl(
     ident: &Ident,
     generics: &Generics,
@@ -396,13 +472,23 @@ fn generate_unpin_impl(
     else {
         unreachable!()
     };
-    let pinned_fields = fields.iter().filter(|f| f.pinned).map(|f| {
-        let ident = f.field.ident.as_ref().unwrap();
-        let ty = &f.field.ty;
+
+    let pinned_fields = if fields.iter().any(|f| f.borrowed.is_some()) {
+        // Self-referential structs must always be pinned.
         quote!(
-            #ident: #ty
+            __phantom_pinned: ::core::marker::PhantomPinned,
         )
-    });
+    } else {
+        let pinned_fields = fields.iter().filter(|f| f.pinned).map(|f| {
+            let ident = f.field.ident.as_ref().unwrap();
+            let ty = &f.field.ty;
+            quote!(
+                #ident: #ty
+            )
+        });
+        quote!(#(#pinned_fields,)*)
+    };
+
     quote! {
         // This struct will be used for the unpin analysis. It is needed, because only structurally
         // pinned fields are relevant whether the struct should implement `Unpin`.
@@ -416,7 +502,7 @@ fn generate_unpin_impl(
         {
             __phantom_pin: ::pin_init::__internal::PhantomInvariantLifetime<'__pin>,
             __phantom: ::pin_init::__internal::PhantomInvariant<#ident #ty_generics>,
-            #(#pinned_fields),*
+            #pinned_fields
         }
 
         #[doc(hidden)]
