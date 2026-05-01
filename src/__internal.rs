@@ -489,3 +489,61 @@ pub struct SelfRef<F: ForLt4>(
 unsafe impl<F: ForLt4> Send for SelfRef<F> where for<'a, 'b, 'c, 'd> F::Of<'a, 'b, 'c, 'd>: Send {}
 // SAFETY: The bound ensures that `F::Of` is `Sync` for all lifetime parameters.
 unsafe impl<F: ForLt4> Sync for SelfRef<F> where for<'a, 'b, 'c, 'd> F::Of<'a, 'b, 'c, 'd>: Sync {}
+
+/// Zero-sized type used to mark a type as invariant.
+#[repr(transparent)]
+pub struct PhantomInvariant<T: ?Sized>(PhantomData<fn(T) -> T>);
+
+impl<T: ?Sized> Clone for PhantomInvariant<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: ?Sized> Copy for PhantomInvariant<T> {}
+
+impl<T: ?Sized> Default for PhantomInvariant<T> {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: ?Sized> PhantomInvariant<T> {
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+/// Zero-sized type used to mark a lifetime as invariant.
+#[repr(transparent)]
+#[derive(Clone, Copy, Default)]
+pub struct PhantomInvariantLifetime<'a>(PhantomInvariant<&'a ()>);
+
+impl PhantomInvariantLifetime<'_> {
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self(PhantomInvariant::new())
+    }
+}
+
+pub struct LifetimeGuard<'a> {
+    _phantom: PhantomInvariantLifetime<'a>,
+}
+
+impl<'a> LifetimeGuard<'a> {
+    #[inline(always)]
+    pub fn new<T>(_: &'a PhantomInvariant<&'a mut T>) -> Self {
+        LifetimeGuard {
+            _phantom: PhantomInvariantLifetime::new(),
+        }
+    }
+}
+
+impl<'a> Drop for LifetimeGuard<'a> {
+    #[inline(always)]
+    fn drop(&mut self) {
+        // Intentionally empty. See `generate_drop_check` in `pin_data.rs` for details.
+    }
+}
