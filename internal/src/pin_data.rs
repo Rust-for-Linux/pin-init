@@ -2,8 +2,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens};
+use proc_macro2::{Span, TokenStream};
+use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
     parse::{End, Nothing, Parse},
     parse_quote, parse_quote_spanned,
@@ -11,8 +11,8 @@ use syn::{
     spanned::Spanned,
     visit::Visit,
     visit_mut::VisitMut,
-    Field, Fields, Generics, Ident, Index, Item, ItemStruct, Lifetime, Member, PathSegment, Type,
-    TypePath,
+    Field, Fields, GenericParam, Generics, Ident, Index, Item, ItemStruct, Lifetime, LifetimeParam,
+    Member, PathSegment, Type, TypePath, WhereClause,
 };
 
 use crate::{
@@ -121,8 +121,11 @@ struct StructInfo {
     args: Args,
     struct_: ItemStruct,
     fields: Vec<FieldInfo>,
+    field_idx_map: BTreeMap<Ident, usize>,
     is_tuple_struct: bool,
     self_referential: bool,
+    /// Field lifetime genercis with outlive chain.
+    field_lt_outlive_chain: Generics,
 }
 
 pub(crate) fn expand_with_cfg(
@@ -322,6 +325,32 @@ fn expand(
     })
     .visit_generics(&struct_.generics);
 
+    // Create a lifetime parameter for each field.
+    let borrowed_fields: Vec<_> = fields
+        .iter()
+        .filter_map(|f| Some(f.borrowed.as_ref()?))
+        .collect();
+    let field_lifetime_outlive_chain = Generics {
+        lt_token: None,
+        params: borrowed_fields
+            .iter()
+            .zip(std::iter::once(None).chain(borrowed_fields.iter().map(Some)))
+            .map(|(borrowed, prev)| {
+                GenericParam::Lifetime(LifetimeParam {
+                    attrs: Vec::new(),
+                    lifetime: borrowed.lifetime.clone(),
+                    colon_token: None,
+                    bounds: prev
+                        .iter()
+                        .map(|borrowed| borrowed.lifetime.clone())
+                        .collect(),
+                })
+            })
+            .collect(),
+        gt_token: None,
+        where_clause: None,
+    };
+
     struct_.fields = Fields::Unit;
     let info = StructInfo {
         self_referential: fields
@@ -330,7 +359,9 @@ fn expand(
         args,
         struct_,
         fields: fields,
+        field_idx_map,
         is_tuple_struct,
+        field_lt_outlive_chain: field_lifetime_outlive_chain,
     };
 
     for field in &info.fields {
@@ -356,6 +387,7 @@ fn expand(
     let struct_def = generate_struct_def(&info);
     let unpin_impl = generate_unpin_impl(&info);
     let drop_impl = generate_drop_impl(&info);
+    let drop_order_check = generate_drop_order_check(dcx, &info);
     let projections = generate_projections(&info);
     let the_pin_data = generate_the_pin_data(&info);
 
@@ -364,6 +396,7 @@ fn expand(
         // We put the rest into this const item, because it then will not be accessible to anything
         // outside.
         const _: () = {
+            #drop_order_check
             #projections
             #the_pin_data
             #unpin_impl
@@ -564,6 +597,161 @@ fn generate_drop_impl(info: &StructInfo) -> TokenStream {
                 UselessPinnedDropImpl_you_need_to_specify_PinnedDrop for #ident #ty_generics
                 #whr
             {}
+        }
+    }
+}
+
+fn generate_drop_order_check(dcx: &mut DiagCtxt, info: &StructInfo) -> TokenStream {
+    let ItemStruct {
+        ident: struct_name,
+        generics,
+        ..
+    } = &info.struct_;
+
+    // If the struct is not self-referential then we can just skip.
+    if !info.self_referential {
+        return quote!();
+    }
+
+    // Make sure fields are dropped earlier than the fields that they borrow.
+    for (i, field) in info.fields.iter().enumerate() {
+        let ident = field.member.as_ident();
+        for capture in &field.captures {
+            let borrowed_field = &capture.lifetime.ident;
+
+            if let Some(&borrowed_idx) = info.field_idx_map.get(borrowed_field) {
+                if i == borrowed_idx {
+                    // We need a strict outlive relationship, in case the lifetime is needed by the
+                    // field's drop glue.
+                    dcx.error(
+                        borrowed_field,
+                        format!("field `{ident}` cannot borrow from itself"),
+                    );
+                } else if i > borrowed_idx {
+                    dcx.error(
+                        borrowed_field,
+                        format!("field `{ident}` borrows `{borrowed_field}`, but drops later"),
+                    );
+                }
+            }
+        }
+    }
+
+    // The check above is necessary, but not sufficient.
+    //
+    // Consider this case:
+    // ```
+    // struct Foo {
+    //     x: &'b &'a (),
+    //     a: String,
+    //     y: PrintOnDrop<&'b str>,
+    //     b: String,
+    // }
+    // ```
+    // we need to ensure that `b` will strictly outlive `a`.
+    //
+    // Rust needs to ensure that types are well-formed; in the above example, `&'b &'a ()` is
+    // well-formed only if `a` outlive `b`. To avoid requiring everyone from having to express this
+    // bound explicitly when declaring a struct, the `'b: 'a` bound is inferred by the Rust
+    // compiler. However this causes an issue, where now `&'a str` can be coerced to `&'b str`
+    // because compiler thinks that it shorten the lifetime. We'll be able to put a reference to `a`
+    // into `y`; but `a` drops first, so when `y` drops, it accesses `a` and causes a
+    // use-after-free!
+    //
+    // Therefore, we must ensure the types contained within the struct has their implied bound being
+    // consistent with the actual lifetime relationship. We create a `__drop_order_check` function,
+    // with known lifetime bounds as bounds on the function, and asks Rust to *prove* that the types
+    // are wellformed, given the bounds.
+
+    let generics_with_field_lt = CombinedGenerics(vec![&info.field_lt_outlive_chain, generics]);
+
+    let (_, ty_generics, _) = generics.split_for_impl();
+    let (impl_generics_with_field_lt, _, _) = generics_with_field_lt.split_for_impl();
+
+    let mut where_clause = generics
+        .where_clause
+        .clone()
+        .unwrap_or_else(|| WhereClause {
+            where_token: Default::default(),
+            predicates: Default::default(),
+        });
+
+    // Construct bounds where generic lifetime outlives field lifetimes, so field types can refer to generics.
+    if let Some(last_field_lt) = info
+        .fields
+        .iter()
+        .filter_map(|f| Some(&f.borrowed.as_ref()?.lifetime))
+        .last()
+    {
+        for param in generics.params.iter() {
+            match param {
+                GenericParam::Lifetime(param) => {
+                    let lifetime = &param.lifetime;
+                    where_clause
+                        .predicates
+                        .push(parse_quote!(#lifetime: #last_field_lt));
+                }
+                GenericParam::Type(param) => {
+                    let ident = &param.ident;
+                    where_clause
+                        .predicates
+                        .push(parse_quote!(#ident: #last_field_lt));
+                }
+                GenericParam::Const(_) => (),
+            }
+        }
+    }
+
+    // Prove the wellformedness of struct fields with regarding to the bounds of
+    // `__drop_order_check`.
+    //
+    // Consider this case:
+    // ```
+    // struct Foo {
+    //     x: &'b &'a (),
+    //     a: String,
+    //     y: PrintOnDrop<&'b str>,
+    //     b: String,
+    // }
+    // ```
+    // we need to ensure that `b` will strictly outlive `a`.
+    //
+    // Rust needs to ensure that types are well-formed; in the above example, `&'b &'a ()` is
+    // well-formed only if `a` outlive `b`. To avoid requiring everyone from having to express this
+    // bound explicitly when declaring a struct, the `'b: 'a` bound is inferred by the Rust
+    // compiler. However this causes an issue, where now `&'a str` can be coerced to `&'b str`
+    // because compiler thinks that it shorten the lifetime. We'll be able to put a reference to `a`
+    // into `y`; but `a` drops first, so when `y` drops, it accesses `a` and causes a
+    // use-after-free!
+    //
+    // Rust needs to *prove* the wellformedness of the type below, taking into account only the
+    // explicitly defined bounds plus the bounds implied by the lifetime-erased struct (but not
+    // the full implied bound between the field lifetimes).
+    let wf_proofs = info.fields.iter().rev().map(|f| {
+        let ty = &f.field.ty;
+        let ident = f.member.as_ident();
+        if let Some(borrowed) = &f.borrowed {
+            let lt = &borrowed.lifetime;
+            quote!(
+                let #ident: &#lt mut #ty = loop {};
+            )
+        } else {
+            quote!(
+                let #ident: #ty = loop {};
+            )
+        }
+    });
+
+    let struct_span = struct_name.span().resolved_at(Span::mixed_site());
+    quote_spanned! {struct_span =>
+        #[allow(non_snake_case, unused)]
+        fn __drop_order_check #impl_generics_with_field_lt (
+            // This must be present so the function can *assume* the implied bounds on the erased
+            // struct. For example, if the struct has `&'a T`, Rust will infer `T: 'a`; we still
+            // wantb to assume these bounds as they are not relevant to the field lifetimes.
+            _: &#struct_name #ty_generics,
+        ) #where_clause {
+            #(#wf_proofs)*
         }
     }
 }
