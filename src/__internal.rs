@@ -5,6 +5,8 @@
 //! These items must not be used outside of this crate and the pin-init-internal crate located at
 //! `../internal`.
 
+use core::marker::PhantomPinned;
+
 use super::*;
 
 /// Zero-sized type used to mark a type as invariant.
@@ -431,3 +433,59 @@ unsafe impl<T: ?Sized> PinInit<T, ()> for AlwaysFail<T> {
         Err(())
     }
 }
+
+/// Representation of types generic over 4 lifetimes.
+///
+/// This type limits the maximum amount of self-referential lifetimes supported, as we have checks
+/// that requires generalization over lifetime and it is unsound to substitute lifetime. 2 lifetimes
+/// can easily happen, 3 lifetimes should be much rarer, and 4 or more lifetimes would be
+/// exceedingly rare.
+pub trait ForLt4 {
+    /// The type parameterized by the lifetime.
+    type Of<'a, 'b, 'c, 'd>;
+}
+
+// This is a helper trait for implementation `ForLt4` to be able to use HRTB.
+pub trait WithLt4<'a, 'b, 'c, 'd> {
+    type Of;
+}
+
+pub struct ForLtImpl<T: ?Sized>(PhantomData<T>);
+
+impl<T: ?Sized + for<'a, 'b, 'c, 'd> WithLt4<'a, 'b, 'c, 'd>> ForLt4 for ForLtImpl<T> {
+    type Of<'a, 'b, 'c, 'd> = <T as WithLt4<'a, 'b, 'c, 'd>>::Of;
+}
+
+/// A wrapper for fields that reference other fields to block direct access.
+///
+/// Use the higher-ranked lifetime facility to support this. Note that it is important that this is
+/// *not* just a wrapper of `F::Of<'static>`, so we can implement `Send` and `Sync` only when things
+/// are true for all lifetimes.
+#[repr(transparent)]
+pub struct SelfRef<F: ForLt4>(
+    F::Of<'static, 'static, 'static, 'static>,
+    // Mark the type as `!Send` and `!Sync` so we can implement it manually. The auto trait
+    // implementation will cause `SelfRef<F>` to be `Send`/`Sync` when only `'static` is, causing a
+    // soundness hole similar to that of specialization.
+    PhantomData<*mut ()>,
+    // Mark the type as `!Unpin`. This is not actually needed for this type, but it is used to ensure
+    // tha the containing type is not `Unpin` by auto trait implementation.
+    //
+    // In a case of
+    // ```
+    // #[pin_data]
+    // struct Foo {
+    //     a: &'b u32,
+    //     b: u32,
+    // }
+    // ```
+    //
+    // This requires the type to be `!Unpin` despite all field types are `Unpin`. The `b` field is not going
+    // to transformed, so we rely on `SelfRef` to be the type that is `!Unpin`.
+    PhantomPinned,
+);
+
+// SAFETY: The bound ensures that `F::Of` is `Send` for all lifetime parameters.
+unsafe impl<F: ForLt4> Send for SelfRef<F> where for<'a, 'b, 'c, 'd> F::Of<'a, 'b, 'c, 'd>: Send {}
+// SAFETY: The bound ensures that `F::Of` is `Sync` for all lifetime parameters.
+unsafe impl<F: ForLt4> Sync for SelfRef<F> where for<'a, 'b, 'c, 'd> F::Of<'a, 'b, 'c, 'd>: Sync {}

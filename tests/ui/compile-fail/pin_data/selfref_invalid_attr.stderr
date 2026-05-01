@@ -39,25 +39,3 @@ error: self-referential support is not fully implemented
    |
 13 |     okay: &'b u32,
    |     ^^^^^^^^^^^^^
-
-error[E0261]: use of undeclared lifetime name `'non_exist`
-  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:10:16
-   |
-10 |     implicit: &'non_exist u32,
-   |                ^^^^^^^^^^ undeclared lifetime
-   |
-help: consider introducing lifetime `'non_exist` here
-   |
- 4 | struct InvalidAttr<'non_exist, 'a> {
-   |                    +++++++++++
-
-error[E0261]: use of undeclared lifetime name `'b`
-  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:13:12
-   |
-13 |     okay: &'b u32,
-   |            ^^ undeclared lifetime
-   |
-help: consider introducing lifetime `'b` here
-   |
- 4 | struct InvalidAttr<'b, 'a> {
-   |                    +++
