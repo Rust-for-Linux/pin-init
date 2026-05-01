@@ -58,6 +58,90 @@ const _: () = {
         }
     }
     #[doc(hidden)]
+    struct __PinDataLt<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
+    where
+        T: Bar<'a, 1>,
+    {
+        __phantom: ::core::marker::PhantomData<__DropCheck<'a, 'b, T, SIZE>>,
+    }
+    impl<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize> ::core::clone::Clone
+    for __PinDataLt<'a, 'b, T, SIZE>
+    where
+        T: Bar<'a, 1>,
+    {
+        fn clone(&self) -> Self {
+            *self
+        }
+    }
+    impl<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize> ::core::marker::Copy
+    for __PinDataLt<'a, 'b, T, SIZE>
+    where
+        T: Bar<'a, 1>,
+    {}
+    #[allow(dead_code)]
+    #[expect(clippy::missing_safety_doc)]
+    impl<
+        'a,
+        'b: 'a,
+        T: Bar<'b> + ?Sized + 'a,
+        const SIZE: usize,
+    > __PinDataLt<'a, 'b, T, SIZE>
+    where
+        T: Bar<'a, 1>,
+    {
+        /// # Safety
+        ///
+        /// - `slot` is valid and properly aligned.
+        /// - `(*slot).#field_name` is properly aligned.
+        /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
+        ///    memory.
+        #[allow(non_snake_case)]
+        #[inline(always)]
+        unsafe fn array(
+            self,
+            slot: *mut Foo<'a, 'b, T, SIZE>,
+        ) -> ::pin_init::__internal::Slot<
+            ::pin_init::__internal::Unpinned,
+            [u8; 1024 * 1024],
+        > {
+            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot).array as _) }
+        }
+        /// # Safety
+        ///
+        /// - `slot` is valid and properly aligned.
+        /// - `(*slot).#field_name` is properly aligned.
+        /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
+        ///    memory.
+        #[allow(non_snake_case)]
+        #[inline(always)]
+        unsafe fn r(
+            self,
+            slot: *mut Foo<'a, 'b, T, SIZE>,
+        ) -> ::pin_init::__internal::Slot<
+            ::pin_init::__internal::Unpinned,
+            &'b mut [&'a mut T; SIZE],
+        > {
+            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot).r as _) }
+        }
+        /// # Safety
+        ///
+        /// - `slot` is valid and properly aligned.
+        /// - `(*slot).#field_name` is properly aligned.
+        /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
+        ///    memory.
+        #[allow(non_snake_case)]
+        #[inline(always)]
+        unsafe fn _pin(
+            self,
+            slot: *mut Foo<'a, 'b, T, SIZE>,
+        ) -> ::pin_init::__internal::Slot<
+            ::pin_init::__internal::Pinned,
+            PhantomPinned,
+        > {
+            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot)._pin as _) }
+        }
+    }
+    #[doc(hidden)]
     struct __ThePinData<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
     where
         T: Bar<'a, 1>,
@@ -78,8 +162,6 @@ const _: () = {
     where
         T: Bar<'a, 1>,
     {}
-    #[allow(dead_code)]
-    #[expect(clippy::missing_safety_doc)]
     impl<
         'a,
         'b: 'a,
@@ -93,63 +175,18 @@ const _: () = {
         #[inline(always)]
         fn __make_closure<__F, __E>(self, f: __F) -> __F
         where
-            __F: FnOnce(
+            __F: ::core::ops::FnOnce(
                 *mut Foo<'a, 'b, T, SIZE>,
-                __ThePinData<'a, 'b, T, SIZE>,
+                __PinDataLt<'a, 'b, T, SIZE>,
             ) -> ::core::result::Result<::pin_init::__internal::InitOk, __E>,
         {
             f
         }
-        /// # Safety
-        ///
-        /// - `slot` is valid and properly aligned.
-        /// - `(*slot).#field_name` is properly aligned.
-        /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
-        ///    memory.
-        #[allow(non_snake_case)]
         #[inline(always)]
-        unsafe fn array(
-            self,
-            slot: *mut Foo<'a, 'b, T, SIZE>,
-        ) -> ::pin_init::__internal::Slot<
-            ::pin_init::__internal::Unpinned,
-            [u8; 1024 * 1024],
-        > {
-            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot).array) }
-        }
-        /// # Safety
-        ///
-        /// - `slot` is valid and properly aligned.
-        /// - `(*slot).#field_name` is properly aligned.
-        /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
-        ///    memory.
-        #[allow(non_snake_case)]
-        #[inline(always)]
-        unsafe fn r(
-            self,
-            slot: *mut Foo<'a, 'b, T, SIZE>,
-        ) -> ::pin_init::__internal::Slot<
-            ::pin_init::__internal::Unpinned,
-            &'b mut [&'a mut T; SIZE],
-        > {
-            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot).r) }
-        }
-        /// # Safety
-        ///
-        /// - `slot` is valid and properly aligned.
-        /// - `(*slot).#field_name` is properly aligned.
-        /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
-        ///    memory.
-        #[allow(non_snake_case)]
-        #[inline(always)]
-        unsafe fn _pin(
-            self,
-            slot: *mut Foo<'a, 'b, T, SIZE>,
-        ) -> ::pin_init::__internal::Slot<
-            ::pin_init::__internal::Pinned,
-            PhantomPinned,
-        > {
-            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot)._pin) }
+        fn __with_lt(self) -> __PinDataLt<'a, 'b, T, SIZE> {
+            __PinDataLt {
+                __phantom: ::core::marker::PhantomData,
+            }
         }
     }
     unsafe impl<

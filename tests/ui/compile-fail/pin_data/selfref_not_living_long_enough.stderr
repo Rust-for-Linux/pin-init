@@ -1,0 +1,19 @@
+error[E0521]: borrowed data escapes outside of function
+  --> tests/ui/compile-fail/pin_data/selfref_not_living_long_enough.rs:12:31
+   |
+11 |   fn self_ref(outer: &str) {
+   |               -----  - let's call the lifetime of this reference `'1`
+   |               |
+   |               `outer` is a reference that is only valid in the function body
+12 |       stack_pin_init!(let foo = pin_init!(SelfRef {
+   |  _______________________________^
+13 | |         foo: "hello world".to_owned(),
+14 | |         bar: "hello world".to_owned(),
+15 | |         part: &outer[..5],
+16 | |     }));
+   | |      ^
+   | |      |
+   | |______`outer` escapes the function body here
+   |        argument requires that `'1` must outlive `'static`
+   |
+   = note: this error originates in the macro `pin_init` (in Nightly builds, run with -Z macro-backtrace for more info)

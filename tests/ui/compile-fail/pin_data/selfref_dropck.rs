@@ -24,11 +24,11 @@ struct UnsoundImplied {
 }
 
 fn main() {
-    // let _foo = Box::pin_init(pin_init!(UnsoundImplied {
-    //     ptr: &&(),
-    //     a: "hello".to_owned(),
-    //     cannot_refer_a: PrintOnDrop(a),
-    //     b: "world".to_owned(),
-    // }))
-    // .unwrap();
+    let _foo = Box::pin_init(pin_init!(UnsoundImplied {
+        ptr: &&(),
+        a: "hello".to_owned(),
+        cannot_refer_a: PrintOnDrop(a),
+        b: "world".to_owned(),
+    }))
+    .unwrap();
 }
