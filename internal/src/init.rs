@@ -167,7 +167,7 @@ pub(crate) fn expand(
             }
         );
         let init = move |slot| -> ::core::result::Result<(), #error> {
-            init(slot, #data).map(|__InitOk| ())
+            init(slot, #data.__with_lt()).map(|__InitOk| ())
         };
         // SAFETY: TODO
         unsafe { ::pin_init::#init_from_closure::<_, #error>(init) }

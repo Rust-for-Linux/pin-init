@@ -35,28 +35,18 @@ const _: () = {
         }
     }
     #[doc(hidden)]
-    struct __ThePinData {
-        __phantom: ::pin_init::__internal::PhantomInvariant<Foo>,
+    struct __PinDataLt {
+        __phantom: ::core::marker::PhantomData<__DropCheck>,
     }
-    impl ::core::clone::Clone for __ThePinData {
+    impl ::core::clone::Clone for __PinDataLt {
         fn clone(&self) -> Self {
             *self
         }
     }
-    impl ::core::marker::Copy for __ThePinData {}
+    impl ::core::marker::Copy for __PinDataLt {}
     #[allow(dead_code)]
-    impl __ThePinData {
-        /// Type inference helper function.
-        #[inline(always)]
-        fn __make_closure<__F, __E>(self, f: __F) -> __F
-        where
-            __F: FnOnce(
-                *mut Foo,
-                __ThePinData,
-            ) -> ::core::result::Result<::pin_init::__internal::InitOk, __E>,
-        {
-            f
-        }
+    #[expect(clippy::missing_safety_doc)]
+    impl __PinDataLt {
         /// # Safety
         ///
         /// - `slot` is valid and properly aligned.
@@ -72,7 +62,7 @@ const _: () = {
             ::pin_init::__internal::Unpinned,
             [u8; 1024 * 1024],
         > {
-            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot).array) }
+            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot).array as _) }
         }
         /// # Safety
         ///
@@ -89,7 +79,36 @@ const _: () = {
             ::pin_init::__internal::Pinned,
             PhantomPinned,
         > {
-            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot)._pin) }
+            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot)._pin as _) }
+        }
+    }
+    #[doc(hidden)]
+    struct __ThePinData {
+        __phantom: ::pin_init::__internal::PhantomInvariant<Foo>,
+    }
+    impl ::core::clone::Clone for __ThePinData {
+        fn clone(&self) -> Self {
+            *self
+        }
+    }
+    impl ::core::marker::Copy for __ThePinData {}
+    impl __ThePinData {
+        /// Type inference helper function.
+        #[inline(always)]
+        fn __make_closure<__F, __E>(self, f: __F) -> __F
+        where
+            __F: ::core::ops::FnOnce(
+                *mut Foo,
+                __PinDataLt,
+            ) -> ::core::result::Result<::pin_init::__internal::InitOk, __E>,
+        {
+            f
+        }
+        #[inline(always)]
+        fn __with_lt(self) -> __PinDataLt {
+            __PinDataLt {
+                __phantom: ::core::marker::PhantomData,
+            }
         }
     }
     unsafe impl ::pin_init::__internal::HasPinData for Foo {

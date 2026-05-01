@@ -865,6 +865,7 @@ macro_rules! assert_pinned {
         let _ = move |ptr: *mut $ty| unsafe {
             let data = <$ty as $crate::__internal::HasPinData>::__pin_data();
             _ = data
+                .__with_lt()
                 .$field(ptr)
                 .init($crate::__internal::AlwaysFail::<$field_ty>::new());
         };
