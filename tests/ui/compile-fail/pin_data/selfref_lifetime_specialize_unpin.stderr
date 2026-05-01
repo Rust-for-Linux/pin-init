@@ -1,15 +1,3 @@
-error: self-referential support is not fully implemented
-  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize_unpin.rs:14:5
-   |
-14 |     lt_spec: LtSpec<'a>,
-   |     ^^^^^^^^^^^^^^^^^^^
-
-error: self-referential support is not fully implemented
-  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize_unpin.rs:20:5
-   |
-20 |     lt_spec2: LtSpec2<'a, 'b>,
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
-
 error[E0277]: `PhantomPinned` cannot be unpinned
   --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize_unpin.rs:29:20
    |

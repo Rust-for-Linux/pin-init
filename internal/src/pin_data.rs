@@ -3,15 +3,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
     parse::{End, Nothing, Parse},
     parse_quote, parse_quote_spanned,
     punctuated::Punctuated,
     spanned::Spanned,
     visit_mut::VisitMut,
-    Attribute, Field, Fields, Generics, Ident, Item, ItemStruct, Lifetime, PathSegment, Token,
-    Type, TypePath, Visibility, WhereClause,
+    Attribute, Field, Fields, GenericParam, Generics, Ident, Item, ItemStruct, Lifetime,
+    LifetimeParam, PathSegment, Token, Type, TypePath, Visibility, WhereClause,
 };
 
 use crate::{
@@ -347,16 +347,10 @@ pub(crate) fn pin_data(
         }
     }
 
-    // Reject self-referential structs.
-    for f in &fields {
-        if f.variance.is_some() {
-            dcx.error(f.field, "self-referential support is not fully implemented");
-        }
-    }
-
     let struct_def = generate_struct_def(&struct_, &fields);
     let unpin_impl = generate_unpin_impl(&struct_.ident, &struct_.generics, &fields);
     let drop_impl = generate_drop_impl(&struct_.ident, &struct_.generics, args);
+    let drop_check = generate_drop_check(dcx, &struct_, &fields);
     let projections =
         generate_projections(&struct_.vis, &struct_.ident, &struct_.generics, &fields);
     let the_pin_data =
@@ -367,6 +361,7 @@ pub(crate) fn pin_data(
         // We put the rest into this const item, because it then will not be accessible to anything
         // outside.
         const _: () = {
+            #drop_check
             #projections
             #the_pin_data
             #unpin_impl
@@ -557,6 +552,160 @@ fn generate_drop_impl(ident: &Ident, generics: &Generics, args: Args) -> TokenSt
                 UselessPinnedDropImpl_you_need_to_specify_PinnedDrop for #ident #ty_generics
                 #whr
             {}
+        }
+    }
+}
+
+fn generate_drop_check(
+    dcx: &mut DiagCtxt,
+    struct_: &ItemStruct,
+    fields: &[FieldInfo<'_>],
+) -> TokenStream {
+    let struct_name = &struct_.ident;
+    // If the struct is not self-referential then we can just skip. However, still leave a
+    // `__DropCheck` type around which can be used to capture all field lifetimes by other
+    // generated code.
+    if fields.iter().all(|f| f.borrowed.is_none()) {
+        return quote!(
+            use #struct_name as __DropCheck;
+        );
+    }
+
+    // Make sure fields are dropped earlier than the fields that they borrow.
+    //
+    // Note that this only order fields and their borrow, and not establish the order between two
+    // borrows. The latter is checked below with `__drop_check`. We could also use `__drop_check`
+    // to perform what we check here, but it'll require synthesize lifetimes for more fields and
+    // will emit a less clear error message.
+    for (i, field) in fields.iter().enumerate() {
+        let ident = field.field.ident.as_ref().unwrap();
+        for lt in &field.ty.bound {
+            let borrowed_field = &lt.ident;
+
+            fields
+                .iter()
+                .enumerate()
+                .take(i)
+                .filter(|f| f.1.field.ident.as_ref().unwrap() == borrowed_field)
+                .for_each(|_| {
+                    dcx.error(
+                        borrowed_field,
+                        format!("field `{ident}` borrows `{borrowed_field}`, but drops later",),
+                    );
+                });
+        }
+    }
+
+    // Create a lifetime parameter for each field.
+    let field_lt_params: Vec<_> = fields
+        .iter()
+        .filter(|f| f.borrowed.is_some())
+        .map(|f| {
+            GenericParam::Lifetime(LifetimeParam::new(Lifetime::from_ident(
+                f.field.ident.as_ref().unwrap(),
+            )))
+        })
+        .collect();
+
+    let mut generics_with_field_lt = struct_.generics.clone();
+    generics_with_field_lt
+        .params
+        .extend(field_lt_params.iter().cloned());
+
+    let (_, ty_generics_with_field_lt, _) = generics_with_field_lt.split_for_impl();
+    let (impl_generics, ty_generics, whr) = struct_.generics.split_for_impl();
+
+    // Wrap each field in a `PhantomInvariant`. For borrowed fields, additionally
+    // use `&#lt mut #ty` so the `lt` becomes associated with `#ty` which deduces
+    // implied bounds.
+    let phantom_fields = fields.iter().map(|f| {
+        let ty = &f.field.ty;
+        let ident = f.field.ident.as_ref().unwrap();
+
+        if f.borrowed.is_some() {
+            let lt = Lifetime::from_ident(ident);
+            quote!(
+                #ident: ::pin_init::__internal::PhantomInvariant<&#lt mut #ty>,
+            )
+        } else {
+            quote!(
+                #[allow(non_snake_case)]
+                #ident: ::pin_init::__internal::PhantomInvariant<#ty>,
+            )
+        }
+    });
+
+    let guards = fields.iter().rev().map(|f| {
+        let ident = f.field.ident.as_ref().unwrap();
+        let span = ident.span();
+        if f.borrowed.is_some() {
+            quote_spanned!(span =>
+                // `LifetimeGuard` implements `Drop` and borrows `#ident`, so Rust must ensure that
+                // when the drop impl is called, `#ident` is still alive. Because the guards are
+                // generated in reverse field order, this ensures that the lifetimes of fields
+                // declared later must strictly outlive the lifetimes of fields declared earlier.
+                //
+                // For example, in
+                // ```
+                // struct Foo {
+                //     #[borrows(a, b)]
+                //     x: &'b &'a (),
+                //     a: String,
+                //     y: PrintOnDrop<&'b str>,
+                //     b: String,
+                // }
+                // ```
+                // it ensures that `b` will strictly outlive `a`.
+                //
+                // This is needed because implied bounds exist. Rust needs to ensure that types are
+                // well-formed; in the above example, `&'b &'a ()` is well-formed only if `a`
+                // outlive `b`. To avoid requiring everyone from having to express this bound
+                // explicitly when declaring a struct, the `'b: 'a` bound is inferred by the Rust
+                // compiler. However this causes an issue, where now `&'a str` can be coerced to
+                // `&'b str` because compiler thinks that it shorten the lifetime. This is
+                // catastrophical for self-referencing structs, in the above example we'll be able
+                // to put a reference to `a` into `y`; but `a` drops first, so when `y` drops, it
+                // accesses `a` and causes a use-after-free!
+                //
+                // The code here essentially reconstruct the dropping order and ask the compiler to
+                // check that this won't cause an issue.
+                let #ident = ::pin_init::__internal::PhantomInvariant::new();
+                // `LifetimeGuard::new` has signature of `(&'a PhantomData<&'a mut T>) ->
+                // LifetimeGuard<'a>`. So it serves two purpose: tie the lifetime of binding and the
+                // lifetime in the parameter together, and also borrows it.
+                let _guard = ::pin_init::__internal::LifetimeGuard::new(&#ident);
+            )
+        } else {
+            quote!(
+                // No lifetimes to tie for fields that are not borrowed.
+                let #ident = ::pin_init::__internal::PhantomInvariant::new();
+            )
+        }
+    });
+
+    let fields = fields.iter().map(|f| f.field.ident.as_ref().unwrap());
+
+    let struct_span = struct_.ident.span().resolved_at(Span::mixed_site());
+    quote_spanned! {struct_span =>
+        #[doc(hidden)]
+        #[allow(non_snake_case)]
+        struct __DropCheck #generics_with_field_lt
+            #whr
+        {
+            #(#phantom_fields)*
+        }
+
+        #[allow(non_snake_case)]
+        fn __drop_check #impl_generics (
+            // This must be present so the function can observe the implied bounds.
+            _: &#struct_name #ty_generics,
+            f: impl for<#(#field_lt_params,)*>::core::ops::FnOnce(__DropCheck #ty_generics_with_field_lt)
+        ) #whr {
+            #(#guards)*
+
+            f(__DropCheck {
+                #(#fields,)*
+            })
         }
     }
 }

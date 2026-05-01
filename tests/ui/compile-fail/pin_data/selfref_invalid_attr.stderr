@@ -22,20 +22,13 @@ error: `non_exist_mut` is neither a lifetime in generics nor a field name
 7 |     #[borrows(non_exist, mut non_exist_mut)] // Borrows non-existent fields
   |                              ^^^^^^^^^^^^^
 
-error: self-referential support is not fully implemented
- --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:8:5
-  |
-8 |     explicit: u32,
-  |     ^^^^^^^^^^^^^
-
-error: self-referential support is not fully implemented
-  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:10:5
+error[E0261]: use of undeclared lifetime name `'non_exist`
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:10:16
    |
 10 |     implicit: &'non_exist u32,
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
-
-error: self-referential support is not fully implemented
-  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:13:5
+   |                ^^^^^^^^^^ undeclared lifetime
    |
-13 |     okay: &'b u32,
-   |     ^^^^^^^^^^^^^
+help: consider introducing lifetime `'non_exist` here
+   |
+ 4 | struct InvalidAttr<'non_exist, 'a> {
+   |                    +++++++++++

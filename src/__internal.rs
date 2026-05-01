@@ -460,3 +460,23 @@ pub struct SelfRef<F: ForLt4>(
 unsafe impl<F: ForLt4> Send for SelfRef<F> where for<'a, 'b, 'c, 'd> F::Of<'a, 'b, 'c, 'd>: Send {}
 // SAFETY: The bound ensures that `F::Of` is `Sync` for all lifetime parameters.
 unsafe impl<F: ForLt4> Sync for SelfRef<F> where for<'a, 'b, 'c, 'd> F::Of<'a, 'b, 'c, 'd>: Sync {}
+
+pub struct LifetimeGuard<'a> {
+    _phantom: PhantomInvariantLifetime<'a>,
+}
+
+impl<'a> LifetimeGuard<'a> {
+    #[inline(always)]
+    pub fn new<T>(_: &'a PhantomInvariant<&'a mut T>) -> Self {
+        LifetimeGuard {
+            _phantom: PhantomInvariantLifetime::new(),
+        }
+    }
+}
+
+impl<'a> Drop for LifetimeGuard<'a> {
+    #[inline(always)]
+    fn drop(&mut self) {
+        // Intentionally empty. See `generate_drop_check` in `pin_data.rs` for details.
+    }
+}

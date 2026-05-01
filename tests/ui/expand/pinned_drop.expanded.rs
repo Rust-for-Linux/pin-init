@@ -5,6 +5,7 @@ struct Foo {
     _pin: PhantomPinned,
 }
 const _: () = {
+    use Foo as __DropCheck;
     /// Pin-projections of [`Foo`]
     #[allow(dead_code, non_snake_case)]
     #[doc(hidden)]
