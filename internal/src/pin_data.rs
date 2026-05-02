@@ -960,7 +960,23 @@ fn generate_projections(
                 ))
             }
 
-            Some(Variance::NotCovariant(_)) => continue,
+            Some(Variance::NotCovariant(_)) => {
+                let f_doc = format!("Access the `{ident}` field on a shared reference of `Self`.");
+                let vis = &f.field.vis;
+                let with_ident = format_ident!("with_{ident}");
+
+                let bound = f.ty.for_bound();
+                let ty = &f.ty.value;
+
+                accessors.push(quote!(
+                      #[doc = #f_doc]
+                      #[inline]
+                      #vis fn #with_ident<'__this, R>(&'__this self, f: impl #bound ::core::ops::FnOnce(&'__this #ty) -> R) -> R {
+                          // SAFETY: `SelfRef` is layout compatible with `#ty`.
+                          f(unsafe { core::mem::transmute(&self.#ident) })
+                      }
+                  ))
+            }
         }
     }
 
