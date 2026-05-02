@@ -6,16 +6,35 @@ use proc_macro2::Span;
 use quote::quote;
 use syn::punctuated::Punctuated;
 use syn::visit::Visit;
-use syn::GenericParam;
-use syn::{BoundLifetimes, Ident, LifetimeParam};
+use syn::visit_mut::VisitMut;
+use syn::{BoundLifetimes, GenericParam, Ident, LifetimeParam};
 use syn::{Lifetime, Type};
 
 pub(crate) trait TypeExt {
+    /// Check if the type includes macro invocations.
+    ///
+    /// Proc-macros cannot expand macros and peek into them, so if macro is involved sometimes special handling is required.
+    fn has_macro(&self) -> bool;
+
     /// Get the list of unbound lifetimes referenced by the type.
     fn unbound_lifetimes(&self) -> BTreeSet<&Lifetime>;
 }
 
 impl TypeExt for Type {
+    fn has_macro(&self) -> bool {
+        struct HasMacro(bool);
+
+        impl<'ast> Visit<'ast> for HasMacro {
+            fn visit_macro(&mut self, _: &'ast syn::Macro) {
+                self.0 = true;
+            }
+        }
+
+        let mut visitor = HasMacro(false);
+        visitor.visit_type(self);
+        visitor.0
+    }
+
     fn unbound_lifetimes(&self) -> BTreeSet<&Lifetime> {
         struct LifetimeVisitor<'a> {
             bound: BTreeSet<&'a Lifetime>,
@@ -117,14 +136,62 @@ impl Binder<Type> {
             return self.value.clone();
         }
 
-        let bound = self.for_bound_4();
-        let bound_lt = bound.lifetimes.iter();
-        let ty = &self.value;
-        return syn::Type::Verbatim(quote!(
-            <::pin_init::__internal::ForLtImpl<
-                dyn #bound ::pin_init::__internal::WithLt4<#(#bound_lt,)* Of = #ty>
-            > as ::pin_init::__internal::ForLt4>::Of<#lifetime, #lifetime, #lifetime, #lifetime>
-        ));
+        // If the type has macro, we cannot peek into it. Use some different approach to replace
+        // the type using GAT.
+        if self.value.has_macro() {
+            let bound = self.for_bound_4();
+            let bound_lt = bound.lifetimes.iter();
+            let ty = &self.value;
+            return syn::Type::Verbatim(quote!(
+                <::pin_init::__internal::ForLtImpl<
+                    dyn #bound ::pin_init::__internal::WithLt4<#(#bound_lt,)* Of = #ty>
+                > as ::pin_init::__internal::ForLt4>::Of<#lifetime, #lifetime, #lifetime, #lifetime>
+            ));
+        }
+
+        struct LifetimeReplacer<'a> {
+            to_replace: BTreeSet<&'a Lifetime>,
+            replacement: &'a Lifetime,
+        }
+
+        impl VisitMut for LifetimeReplacer<'_> {
+            fn visit_lifetime_mut(&mut self, lt: &mut syn::Lifetime) {
+                if self.to_replace.contains(lt) {
+                    *lt = self.replacement.clone();
+                }
+            }
+
+            fn visit_trait_bound_mut(&mut self, bound: &mut syn::TraitBound) {
+                // In case the type includes a lifetime binder, e.g. `dyn for<'a> Foo`,
+                // temporarily remove them from to_replace if they're.
+
+                let mut removed = Vec::new();
+                if let Some(bound_lt) = &bound.lifetimes {
+                    for lt in &bound_lt.lifetimes {
+                        let GenericParam::Lifetime(lt) = lt else {
+                            continue;
+                        };
+                        if let Some(lt) = self.to_replace.take(&lt.lifetime) {
+                            removed.push(lt);
+                        }
+                    }
+                }
+
+                self.visit_path_mut(&mut bound.path);
+
+                for lt in removed {
+                    self.to_replace.insert(lt);
+                }
+            }
+        }
+
+        let mut ret = self.value.clone();
+        LifetimeReplacer {
+            to_replace: self.bound.iter().collect(),
+            replacement: lifetime,
+        }
+        .visit_type_mut(&mut ret);
+        ret
     }
 }
 
