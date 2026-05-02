@@ -1,0 +1,15 @@
+error: lifetime may not live long enough
+ --> tests/ui/compile-fail/pin_data/selfref_covariant_check.rs:5:14
+  |
+3 | #[pin_data]
+  | ----------- in this attribute macro expansion
+4 | struct SelfRef {
+5 |     not_cov: Box<dyn Fn(&'str str) -> bool + 'str>,
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |              |
+  |              lifetime `'__short` defined here
+  |              lifetime `'__long` defined here
+  |              function was supposed to return data with lifetime `'__long` but it is returning data with lifetime `'__short`
+  |
+  = help: consider adding the following bound: `'__short: '__long`
+  = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)

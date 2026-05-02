@@ -30,7 +30,7 @@ const _: () = {
         array: &'__pin mut [u8; 1024 * 1024],
         r: &'__pin mut &'b mut [&'a mut T; SIZE],
         _pin: ::core::pin::Pin<&'__pin mut PhantomPinned>,
-        ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut ()>,
+        ___pin_phantom_data: ::core::marker::PhantomData<&'__pin Foo<'a, 'b, T, SIZE>>,
     }
     impl<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize> Foo<'a, 'b, T, SIZE>
     where

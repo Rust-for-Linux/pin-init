@@ -1,0 +1,5 @@
+error[E0594]: cannot assign to data in a `&` reference
+  --> tests/ui/compile-fail/pin_data/selfref_project_mut.rs:16:5
+   |
+16 |     *foo.as_mut().project().part = "foo";
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot assign
