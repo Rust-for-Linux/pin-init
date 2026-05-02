@@ -725,6 +725,29 @@ fn generate_projections(
         GenericParam::Lifetime(LifetimeParam::new(pin_lt.clone())),
     );
     let (_, ty_generics_with_pin_lt, whr) = generics_with_pin_lt.split_for_impl();
+
+    let field_lt_params: Vec<_> = fields
+        .iter()
+        .filter(|f| f.borrowed.is_some())
+        .map(|f| {
+            GenericParam::Lifetime(LifetimeParam::new(Lifetime::from_ident(
+                f.field.ident.as_ref().unwrap(),
+            )))
+        })
+        .collect();
+    let mut generics_with_field_lt = generics.clone();
+    generics_with_field_lt
+        .params
+        .extend(field_lt_params.iter().cloned());
+    let (_, ty_generics_with_field_lt, _) = generics_with_field_lt.split_for_impl();
+
+    let mut generics_with_pin_field_lt = generics_with_field_lt.clone();
+    generics_with_pin_field_lt.params.insert(
+        0,
+        GenericParam::Lifetime(LifetimeParam::new(pin_lt.clone())),
+    );
+    let (_, ty_generics_with_pin_field_lt, _) = generics_with_pin_field_lt.split_for_impl();
+
     let this = format_ident!("this");
 
     let (fields_decl, fields_proj): (Vec<_>, Vec<_>) = fields
@@ -796,14 +819,81 @@ fn generate_projections(
             }
         })
         .collect();
-    let structurally_pinned_fields_docs = fields
+
+    let (fields_decl_lt, fields_proj_lt): (Vec<_>, Vec<_>) = fields
+        .iter()
+        .filter(|f| {
+            // Mutably referenced fields cannot be accessed by user at all for aliasing reasons.
+            f.borrowed != Some(Borrowed::Mutable)
+        })
+        .map(|f| {
+            let vis = &f.field.vis;
+            let ident = f
+                .field
+                .ident
+                .as_ref()
+                .expect("only structs with named fields are supported");
+
+            let ty = &f.ty.value;
+
+            // Fields shared-referenced by other fields can only be shared accessed.
+            let mut_token: Option<Token![mut]> = if f.borrowed.is_none() {
+                Some(Default::default())
+            } else {
+                None
+            };
+
+            let mut accessor = quote!(&#mut_token #this.#ident);
+            if f.variance.is_some() {
+                accessor = quote!(
+                    // SAFETY: we have `SelfRef<..>` which we know is layout compatible with `f.ty`.
+                    // We cannot include explicit type name here as the field lifetimes are nameable
+                    // in this context.
+                    unsafe { core::mem::transmute(#accessor) }
+                )
+            }
+
+            // In `with_project`, borrowed fields have their field lifetime available, so use it
+            // instead of `'__pin`.
+            let lt = if f.borrowed.is_some() {
+                &Lifetime::from_ident(ident)
+            } else {
+                &pin_lt
+            };
+
+            if f.pinned {
+                (
+                    quote!(
+                        #vis #ident: ::core::pin::Pin<&#lt #mut_token #ty>,
+                    ),
+                    quote!(
+                        // SAFETY: this field is structurally pinned.
+                        #ident: unsafe { ::core::pin::Pin::new_unchecked(#accessor) },
+                    ),
+                )
+            } else {
+                (
+                    quote!(
+                        #vis #ident: &#lt #mut_token #ty,
+                    ),
+                    quote!(
+                        #ident: #accessor,
+                    ),
+                )
+            }
+        })
+        .collect();
+
+    let structurally_pinned_fields_docs: Vec<_> = fields
         .iter()
         .filter(|f| f.pinned)
-        .map(|f| format!(" - `{}`", f.field.ident.as_ref().unwrap()));
-    let not_structurally_pinned_fields_docs = fields
+        .map(|f| format!(" - `{}`", f.field.ident.as_ref().unwrap()))
+        .collect();
+    let not_structurally_pinned_fields_docs: Vec<_> = fields
         .iter()
         .filter(|f| !f.pinned)
-        .map(|f| format!(" - `{}`", f.field.ident.as_ref().unwrap()));
+        .map(|f| format!(" - `{}`", f.field.ident.as_ref().unwrap()))
+        .collect();
     let docs = format!(" Pin-projections of [`{ident}`]");
 
     // For fields that references other fields, field access syntax stops working as they're wrapped
@@ -879,6 +969,18 @@ fn generate_projections(
             ___pin_phantom_data: ::core::marker::PhantomData<&'__pin #ident #ty_generics>,
         }
 
+        #[doc = #docs]
+        // Allow `non_snake_case` since the same warning will be emitted on
+        // the struct definition.
+        #[allow(dead_code, non_snake_case)]
+        #[doc(hidden)]
+        #vis struct __ProjectionLt #generics_with_pin_field_lt
+            #whr
+        {
+            #(#fields_decl_lt)*
+            ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut __DropCheck #ty_generics_with_field_lt>,
+        }
+
         impl #impl_generics #ident #ty_generics
             #whr
         {
@@ -899,6 +1001,26 @@ fn generate_projections(
                     #(#fields_proj)*
                     ___pin_phantom_data: ::core::marker::PhantomData,
                 }
+            }
+
+            /// Pin-projects all fields of `Self` with proper lifetime.
+            ///
+            /// These fields are structurally pinned:
+            #(#[doc = #structurally_pinned_fields_docs])*
+            ///
+            /// These fields are **not** structurally pinned:
+            #(#[doc = #not_structurally_pinned_fields_docs])*
+            #[inline]
+            #vis fn with_project<'__pin, R>(
+                self: ::core::pin::Pin<&'__pin mut Self>,
+                f: impl for<#(#field_lt_params,)*>::core::ops::FnOnce(__ProjectionLt #ty_generics_with_pin_field_lt) -> R
+            ) -> R {
+                // SAFETY: we only give access to `&mut` for fields not structurally pinned.
+                let #this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
+                f(__ProjectionLt {
+                    #(#fields_proj_lt)*
+                    ___pin_phantom_data: ::core::marker::PhantomData,
+                })
             }
 
             #(#accessors)*
