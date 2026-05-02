@@ -27,3 +27,13 @@ error[E0592]: duplicate definitions with name `project`
   | ^^^^^^^^^^^ duplicate definitions for `project`
   |
   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `with_project`
+ --> tests/ui/compile-fail/pin_data/twice.rs:4:1
+  |
+3 | #[pin_data]
+  | ----------- other definition for `with_project`
+4 | #[pin_data]
+  | ^^^^^^^^^^^ duplicate definitions for `with_project`
+  |
+  = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
