@@ -75,8 +75,7 @@ impl<T> Binder<T> {
     }
 
     /// Obtain a `for<...>` that can be used to construct a higher-ranked trait bound.
-    #[expect(unused)]
-    pub fn for_bound(&self) -> BoundLifetimes {
+    pub(crate) fn for_bound(&self) -> BoundLifetimes {
         BoundLifetimes {
             for_token: Default::default(),
             lt_token: Default::default(),
