@@ -1410,7 +1410,21 @@ fn generate_projections(info: &StructInfo) -> TokenStream {
                 }
             ))
         } else {
-            continue;
+            let f_doc = format!("Access the `{ident}` field on a shared reference of `Self`.");
+            let vis = &f.field.vis;
+            let with_ident = format_ident!("with_{ident}");
+
+            let all_lifetimes: Vec<_> = f.captures.iter().map(|b| &b.lifetime).collect();
+            let ty = &f.field.ty;
+
+            accessors.push(quote!(
+                #[doc = #f_doc]
+                #[inline]
+                #vis fn #with_ident<'__this, R>(&'__this self, f: impl for<#(#all_lifetimes,)*> ::core::ops::FnOnce(&'__this #ty) -> R) -> R {
+                    // SAFETY: `SelfRef` is layout compatible with `#ty`.
+                    f(unsafe { core::mem::transmute(&self.#ident) })
+                }
+            ))
         }
     }
 
