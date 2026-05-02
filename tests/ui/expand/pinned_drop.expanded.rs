@@ -13,6 +13,14 @@ const _: () = {
         _pin: ::core::pin::Pin<&'__this mut PhantomPinned>,
         __this: ::core::marker::PhantomData<&'__this mut Foo>,
     }
+    /// Pin-projections of [`Foo`]
+    #[allow(dead_code, non_snake_case)]
+    #[doc(hidden)]
+    struct __ProjectionLt<'__this> {
+        array: &'__this mut [u8; 1024 * 1024],
+        _pin: ::core::pin::Pin<&'__this mut PhantomPinned>,
+        ___pin_phantom_data: ::core::marker::PhantomData<&'__this mut Foo>,
+    }
     impl Foo {
         /// Pin-projects all fields of `Self`.
         ///
@@ -31,6 +39,25 @@ const _: () = {
                 _pin: unsafe { ::core::pin::Pin::new_unchecked(&mut this._pin) },
                 __this: ::core::marker::PhantomData,
             }
+        }
+        /// Pin-projects all fields of `Self` with proper lifetime.
+        ///
+        /// These fields are structurally pinned:
+        /// - `_pin`
+        ///
+        /// These fields are **not** structurally pinned:
+        /// - `array`
+        #[inline]
+        fn with_project<'__this, R>(
+            self: ::core::pin::Pin<&'__this mut Self>,
+            f: impl ::core::ops::FnOnce(__ProjectionLt<'__this>) -> R,
+        ) -> R {
+            let this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
+            f(__ProjectionLt {
+                array: &mut this.array,
+                _pin: unsafe { ::core::pin::Pin::new_unchecked(&mut this._pin) },
+                ___pin_phantom_data: ::core::marker::PhantomData,
+            })
         }
     }
     #[doc(hidden)]
