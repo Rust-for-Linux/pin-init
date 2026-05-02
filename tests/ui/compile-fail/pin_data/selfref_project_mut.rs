@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0 OR MIT
-
 use pin_init::*;
 
 #[pin_data]
@@ -14,11 +12,8 @@ fn use_self_ref() {
         part: &str[..5],
     }));
 
-    // Access via projection.
-    println!("{}", foo.as_mut().project().part);
-
-    // Access via accessor.
-    println!("{}", foo.part());
+    // Should fail due to reference not being mutable.
+    *foo.as_mut().project().part = "foo";
 }
 
 fn main() {

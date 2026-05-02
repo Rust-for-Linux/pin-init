@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 
 use proc_macro2::Span;
+use quote::quote;
 use syn::punctuated::Punctuated;
 use syn::visit::Visit;
 use syn::GenericParam;
@@ -107,6 +108,24 @@ impl<T> Binder<T> {
             lifetimes,
             gt_token: Default::default(),
         }
+    }
+}
+
+impl Binder<Type> {
+    pub(crate) fn instantiate(&self, lifetime: &Lifetime) -> Type {
+        // If there's no bound lifetimes, just return.
+        if self.bound.is_empty() {
+            return self.value.clone();
+        }
+
+        let bound = self.for_bound_4();
+        let bound_lt = bound.lifetimes.iter();
+        let ty = &self.value;
+        return syn::Type::Verbatim(quote!(
+            <::pin_init::__internal::ForLtImpl<
+                dyn #bound ::pin_init::__internal::WithLt4<#(#bound_lt,)* Of = #ty>
+            > as ::pin_init::__internal::ForLt4>::Of<#lifetime, #lifetime, #lifetime, #lifetime>
+        ));
     }
 }
 

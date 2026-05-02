@@ -12,7 +12,7 @@ const _: () = {
     struct __Projection<'__pin> {
         array: &'__pin mut [u8; 1024 * 1024],
         _pin: ::core::pin::Pin<&'__pin mut PhantomPinned>,
-        ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut ()>,
+        ___pin_phantom_data: ::core::marker::PhantomData<&'__pin Foo>,
     }
     impl Foo {
         /// Pin-projects all fields of `Self`.

@@ -669,43 +669,86 @@ fn generate_projections(
     generics: &Generics,
     fields: &[FieldInfo<'_>],
 ) -> TokenStream {
+    let pin_lt = Lifetime::new("'__pin", Span::mixed_site());
+
     let (impl_generics, ty_generics, _) = generics.split_for_impl();
     let mut generics_with_pin_lt = generics.clone();
-    generics_with_pin_lt.params.insert(0, parse_quote!('__pin));
+    generics_with_pin_lt.params.insert(
+        0,
+        GenericParam::Lifetime(LifetimeParam::new(pin_lt.clone())),
+    );
     let (_, ty_generics_with_pin_lt, whr) = generics_with_pin_lt.split_for_impl();
     let this = format_ident!("this");
 
     let (fields_decl, fields_proj): (Vec<_>, Vec<_>) = fields
         .iter()
-        .filter(|f| f.borrowed.is_none() && f.variance.is_none())
-        .map(|field| {
-            let Field { vis, ident, ty, .. } = &field.field;
-            let cfg_attrs = &field.cfg_attrs;
+        .filter(|f| {
+            // Mutably referenced fields cannot be accessed by user at all for aliasing reasons.
+            if f.borrowed == Some(Borrowed::Mutable) {
+                return false;
+            }
 
-            let ident = ident
+            // If the type is not covariant, it must omitted from non-with projection, as such
+            // projection shortens the lifetime from fields to '__pin.
+            if matches!(f.variance, Some(Variance::NotCovariant(_))) {
+                return false;
+            }
+
+            true
+        })
+        .map(|f| {
+            let vis = &f.field.vis;
+            let cfg_attrs = &f.cfg_attrs;
+            let ident = f
+                .field
+                .ident
                 .as_ref()
                 .expect("only structs with named fields are supported");
-            if field.pinned {
+
+            // if `f.ty` contains field lifetimes, which we need to replace them with shorter
+            // `'__pin` lifetime as field lifetimes are not available in this context.
+            let ty = f.ty.instantiate(&pin_lt);
+
+            // Fields shared-referenced by other fields can only be shared accessed. Fields that
+            // references other field and are covariant can also only be given shared reference
+            // as mutable reference is invariant.
+            let mut_token: Option<Token![mut]> = if f.borrowed.is_none() && f.variance.is_none() {
+                Some(Default::default())
+            } else {
+                None
+            };
+
+            let mut accessor = quote!(&#mut_token #this.#ident);
+            if f.variance.is_some() {
+                accessor = quote!(
+                    // SAFETY: we have `SelfRef<..>` which we know is layout compatible with `f.ty`.
+                    // Field lifetimes in `f.ty` can be shortened to `#ty` due to covariance (which
+                    // is checked later).
+                    unsafe { core::mem::transmute::<_, &#mut_token #ty>(#accessor) }
+                )
+            }
+
+            if f.pinned {
                 (
                     quote!(
                         #(#cfg_attrs)*
-                        #vis #ident: ::core::pin::Pin<&'__pin mut #ty>,
+                        #vis #ident: ::core::pin::Pin<&'__pin #mut_token #ty>,
                     ),
                     quote!(
                         #(#cfg_attrs)*
                         // SAFETY: this field is structurally pinned.
-                        #ident: unsafe { ::core::pin::Pin::new_unchecked(&mut #this.#ident) },
+                        #ident: unsafe { ::core::pin::Pin::new_unchecked(#accessor) },
                     ),
                 )
             } else {
                 (
                     quote!(
                         #(#cfg_attrs)*
-                        #vis #ident: &'__pin mut #ty,
+                        #vis #ident: &'__pin #mut_token #ty,
                     ),
                     quote!(
                         #(#cfg_attrs)*
-                        #ident: &mut #this.#ident,
+                        #ident: #accessor,
                     ),
                 )
             }
@@ -720,6 +763,67 @@ fn generate_projections(
         .filter(|f| !f.pinned)
         .map(|f| format!(" - `{}`", f.field.ident.as_ref().unwrap()));
     let docs = format!(" Pin-projections of [`{ident}`]");
+
+    // For fields that references other fields, field access syntax stops working as they're wrapped
+    // behind `SelfRef` because their actual lifetime is not on the struct.
+    //
+    // Generate an accessor method for them.
+    let mut accessors = Vec::new();
+    for f in fields {
+        let ident = f.field.ident.as_ref().unwrap();
+        match f.variance {
+            // They can be accessed normally, no accessor to be generated.
+            None => continue,
+
+            Some(Variance::Covariant(_)) => {
+                let f_doc = format!("Access the `{ident}` field on a shared reference of `Self`.");
+                let vis = &f.field.vis;
+
+                // Use the span of type for better error message.
+                let span = f.ty.value.span().resolved_at(Span::mixed_site());
+
+                let ty = f.ty.instantiate(&pin_lt);
+
+                let long = Lifetime::new("'__long", span);
+                let long_ty = f.ty.instantiate(&long);
+
+                let short = Lifetime::new("'__short", span);
+                let short_ty = f.ty.instantiate(&short);
+
+                // Add `<'__long: '__short, 'short>` as additional generics.
+                let mut covariance_check_generics = generics.clone();
+                covariance_check_generics
+                    .params
+                    .push(GenericParam::Lifetime(LifetimeParam {
+                        attrs: Vec::new(),
+                        lifetime: long,
+                        colon_token: Some(Default::default()),
+                        bounds: std::iter::once(short.clone()).collect(),
+                    }));
+                covariance_check_generics
+                    .params
+                    .push(GenericParam::Lifetime(LifetimeParam::new(short)));
+
+                accessors.push(quote_spanned!(span =>
+                    #[doc = #f_doc]
+                    #[inline]
+                    #vis fn #ident<#pin_lt>(&#pin_lt self) -> &#pin_lt #ty {
+                        // Emit a check to ensure the type is *really* covariant for soundness.
+                        fn covariance_check #covariance_check_generics (long: #long_ty) -> #short_ty {
+                            long
+                        }
+
+                        // SAFETY: `SelfRef` is layout compatible with `#ty` and we have checked
+                        // that it is covariant.
+                        unsafe { core::mem::transmute(&self.#ident) }
+                    }
+                ))
+            }
+
+            Some(Variance::NotCovariant(_)) => continue,
+        }
+    }
+
     quote! {
         #[doc = #docs]
         // Allow `non_snake_case` since the same warning will be emitted on
@@ -730,7 +834,7 @@ fn generate_projections(
             #whr
         {
             #(#fields_decl)*
-            ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut ()>,
+            ___pin_phantom_data: ::core::marker::PhantomData<&'__pin #ident #ty_generics>,
         }
 
         impl #impl_generics #ident #ty_generics
@@ -754,6 +858,8 @@ fn generate_projections(
                     ___pin_phantom_data: ::core::marker::PhantomData,
                 }
             }
+
+            #(#accessors)*
         }
     }
 }
