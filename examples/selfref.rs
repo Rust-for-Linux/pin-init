@@ -19,6 +19,13 @@ fn use_self_ref() {
 
     // Access via accessor.
     println!("{}", foo.part());
+
+    // Access via `with_project`, gives mutable reference.
+    foo.as_mut().with_project(|proj| {
+        *proj.part = &proj.str[5..];
+    });
+
+    println!("{}", foo.part());
 }
 
 fn main() {
