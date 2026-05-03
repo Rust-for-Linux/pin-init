@@ -1202,18 +1202,16 @@ pub fn init_array_from_fn<I, const N: usize, T, E>(
 where
     I: Init<T, E>,
 {
-    let init = move |slot: *mut [T; N]| {
-        let ptr = slot.cast::<T>();
-        // SAFETY: per `__init` safety requirements:
-        //   - `ptr` points to valid uninitialized memory (`[T; N]`),
-        //   - it does not move for the duration of initialization,
-        //   - this closure has exclusive access to initialize it.
-        let guard = unsafe { __internal::ArrayInitGuard::new(ptr, N) };
-        guard.init(make_init)
-    };
-    // SAFETY: The initializer above initializes every element of the array. On failure it drops
-    // any initialized elements and returns `Err` or propagates the panic.
-    unsafe { init_from_closure(init) }
+    // SAFETY: `ArrayInit` initializes every element of the array. On failure it
+    // drops any initialized elements and returns `Err` or propagates the panic.
+    //
+    // Per `__init` safety requirements:
+    //   - `slot` must be a valid pointer to uninitialized `[T; N]`,
+    //   - the elements of the array must not be accessed by any other means until
+    //     they are initialized,
+    //   - the elements of the array must not be dropped by any other means for the
+    //     entire lifetime of `ArrayInit`.
+    unsafe { __internal::ArrayInit::new(make_init) }
 }
 
 /// Initializes an array by initializing each element via the provided initializer.
@@ -1237,19 +1235,16 @@ pub fn pin_init_array_from_fn<I, const N: usize, T, E>(
 where
     I: PinInit<T, E>,
 {
-    let init = move |slot: *mut [T; N]| {
-        let ptr = slot.cast::<T>();
-        // SAFETY: per `__pinned_init` safety requirements:
-        //  - `ptr` points to valid uninitialized memory (`[T; N]),
-        //  - it does not move for the duration of initialization,
-        //  - this closure has exclusive access to initialize it,
-        //  - the pinning invariants of `T` are upheld while initializing.
-        let guard = unsafe { __internal::ArrayInitGuard::new(ptr, N) };
-        guard.pin_init(make_init)
-    };
-    // SAFETY: The initializer above initializes every element of the array. On failure it drops
-    // any initialized elements and returns `Err` or propagates the panic.
-    unsafe { pin_init_from_closure(init) }
+    // SAFETY: `ArrayInit` initializes every element of the array. On failure it
+    // drops any initialized elements and returns `Err` or propagates the panic.
+    //
+    // Per `__pinned_init` safety requirements:
+    //   - `slot` must be a valid pointer to uninitialized `[T; N]`,
+    //   - the elements of the array must not be accessed by any other means until
+    //     they are initialized,
+    //   - the elements of the array must not be dropped by any other means for the
+    //     entire lifetime of `ArrayInit`.
+    unsafe { __internal::ArrayInit::new(make_init) }
 }
 
 /// Construct an initializer in a closure and run it.
