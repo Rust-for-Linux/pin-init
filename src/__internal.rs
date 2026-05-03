@@ -278,6 +278,105 @@ impl<T: ?Sized> Drop for DropGuard<T> {
     }
 }
 
+/// Allows safe (pinned and non-pinned) initialization of an array.
+///
+/// Drops the already initialized elements of the array if an error or panic occurs
+/// partway through the initialization process.
+pub struct ArrayInit<T, F> {
+    /// A pointer to the first element of the array. Null until `__init` or `__pinned_init`
+    /// is called.
+    ptr: *mut T,
+    /// The number of initialized elements in the array.
+    num_init: usize,
+    /// Initialization function factory.
+    make_init: F,
+}
+
+impl<T, F> ArrayInit<T, F> {
+    /// # Safety
+    ///
+    /// This function may only be called from
+    /// [`init_array_from_fn`](crate::init_array_from_fn) or
+    /// [`pin_init_array_from_fn`](crate::pin_init_array_from_fn).
+    pub(crate) unsafe fn new(make_init: F) -> Self {
+        Self {
+            ptr: core::ptr::null_mut(),
+            num_init: 0,
+            make_init,
+        }
+    }
+}
+
+/// SAFETY: On success, all `N` elements of the array have been initialized through
+/// `I: Init`. On error or panic, the elements that have been initialized so far are
+/// dropped, thus leaving the array uninitialized and ready to deallocate. The `Init`
+/// implementation executes the same code as that of `PinInit`.
+unsafe impl<T, F, I, E, const N: usize> Init<[T; N], E> for ArrayInit<T, F>
+where
+    F: FnMut(usize) -> I,
+    I: Init<T, E>,
+{
+    unsafe fn __init(mut self, slot: *mut [T; N]) -> Result<(), E> {
+        self.ptr = slot.cast::<T>();
+        for i in 0..N {
+            let init = (self.make_init)(i);
+            // SAFETY: Since `0 <= i < N`, `self.ptr.add(i)` is in bounds and
+            // valid for writes by the safety contract of `__init`.
+            let ptr = unsafe { self.ptr.add(i) };
+            // SAFETY: The pointer is derived from `slot` and thus satisfies the
+            // `__init` requirements.
+            unsafe { init.__init(ptr) }?;
+            self.num_init += 1;
+        }
+        core::mem::forget(self);
+        Ok(())
+    }
+}
+
+/// SAFETY: On success, all `N` elements of the array have been initialized through
+/// `I`. Since `I: PinInit` guarantees that the pinning invariants of `T` are upheld,
+/// the guarantees of `[T; N]` are also upheld. On error or panic, the elements that
+/// have been initialized so far are dropped, thus leaving the array uninitialized
+/// and ready to deallocate.
+unsafe impl<T, F, I, E, const N: usize> PinInit<[T; N], E> for ArrayInit<T, F>
+where
+    F: FnMut(usize) -> I,
+    I: PinInit<T, E>,
+{
+    unsafe fn __pinned_init(mut self, slot: *mut [T; N]) -> Result<(), E> {
+        self.ptr = slot.cast::<T>();
+        for i in 0..N {
+            let init = (self.make_init)(i);
+            // SAFETY: Since `0 <= i < N`, `self.ptr.add(i)` is in bounds and
+            // valid for writes by the safety contract of `__pinned_init`.
+            let ptr = unsafe { self.ptr.add(i) };
+            // SAFETY: The pointer is derived from `slot` and thus satisfies the
+            // `__pinned_init` requirements.
+            unsafe { init.__pinned_init(ptr) }?;
+            self.num_init += 1;
+        }
+        core::mem::forget(self);
+        Ok(())
+    }
+}
+
+impl<T, F> Drop for ArrayInit<T, F> {
+    fn drop(&mut self) {
+        if self.ptr.is_null() {
+            // No initialization had been attempted, nothing to drop.
+            return;
+        }
+
+        // SAFETY: Safety contract of `ArrayInit` guarantees that elements
+        // `self.ptr[0..self.num_init]` are initialized and contain valid `T`
+        // values, so dropping them is safe.
+        unsafe {
+            let slice = core::ptr::slice_from_raw_parts_mut(self.ptr, self.num_init);
+            core::ptr::drop_in_place(slice)
+        };
+    }
+}
+
 /// Token used by `PinnedDrop` to prevent calling the function without creating this unsafely
 /// created struct. This is needed, because the `drop` function is safe, but should not be called
 /// manually.
