@@ -16,7 +16,7 @@ use syn::{
 
 use crate::{
     diagnostics::{DiagCtxt, ErrorGuaranteed},
-    util::{Binder, LifetimeExt, TypeExt},
+    util::{Binder, GenericsExt, LifetimeExt, TypeExt},
 };
 
 pub(crate) mod kw {
@@ -293,14 +293,48 @@ pub(crate) fn pin_data(
         }
     }
 
+    // Create a lifetime parameter for each field.
+    let field_lts: Vec<_> = fields
+        .iter()
+        .filter(|f| f.borrowed.is_some())
+        .map(|f| Lifetime::from_ident(f.field.ident.as_ref().unwrap()))
+        .collect();
+    let field_lt_generics = Generics {
+        lt_token: Some(Default::default()),
+        params: field_lts
+            .iter()
+            .zip(std::iter::once(None).chain(field_lts.iter().map(Some)))
+            .map(|(lt, prev)| {
+                GenericParam::Lifetime(LifetimeParam {
+                    attrs: Vec::new(),
+                    lifetime: lt.clone(),
+                    colon_token: prev.map(|_| Default::default()),
+                    bounds: prev.iter().map(|&lt| lt.clone()).collect(),
+                })
+            })
+            .collect(),
+        gt_token: Some(Default::default()),
+        where_clause: None,
+    };
+
     let struct_def = generate_struct_def(&struct_, &fields);
     let unpin_impl = generate_unpin_impl(&struct_.ident, &struct_.generics, &fields);
     let drop_impl = generate_drop_impl(&struct_.ident, &struct_.generics, args);
-    let drop_check = generate_drop_check(dcx, &struct_, &fields);
-    let projections =
-        generate_projections(&struct_.vis, &struct_.ident, &struct_.generics, &fields);
-    let the_pin_data =
-        generate_the_pin_data(&struct_.vis, &struct_.ident, &struct_.generics, &fields);
+    let drop_check = generate_drop_check(dcx, &struct_, &fields, &field_lt_generics);
+    let projections = generate_projections(
+        &struct_.vis,
+        &struct_.ident,
+        &struct_.generics,
+        &fields,
+        &field_lt_generics,
+    );
+    let the_pin_data = generate_the_pin_data(
+        &struct_.vis,
+        &struct_.ident,
+        &struct_.generics,
+        &fields,
+        &field_lt_generics,
+    );
 
     Ok(quote! {
         #struct_def
@@ -510,6 +544,7 @@ fn generate_drop_check(
     dcx: &mut DiagCtxt,
     struct_: &ItemStruct,
     fields: &[FieldInfo<'_>],
+    field_lt_generics: &Generics,
 ) -> TokenStream {
     let struct_name = &struct_.ident;
     // If the struct is not self-referential then we can just skip. However, still leave a
@@ -546,22 +581,12 @@ fn generate_drop_check(
         }
     }
 
-    // Create a lifetime parameter for each field.
-    let field_lt_params: Vec<_> = fields
-        .iter()
-        .filter(|f| f.borrowed.is_some())
-        .map(|f| {
-            GenericParam::Lifetime(LifetimeParam::new(Lifetime::from_ident(
-                f.field.ident.as_ref().unwrap(),
-            )))
-        })
-        .collect();
-
     let mut generics_with_field_lt = struct_.generics.clone();
     generics_with_field_lt
         .params
-        .extend(field_lt_params.iter().cloned());
+        .extend(field_lt_generics.params.iter().cloned());
 
+    let field_lt_for_generics = field_lt_generics.for_generics();
     let (_, ty_generics_with_field_lt, _) = generics_with_field_lt.split_for_impl();
     let (impl_generics, ty_generics, whr) = struct_.generics.split_for_impl();
 
@@ -660,7 +685,7 @@ fn generate_drop_check(
         fn __drop_check #impl_generics (
             // This must be present so the function can observe the implied bounds.
             _: &#struct_name #ty_generics,
-            f: impl for<#(#field_lt_params,)*>::core::ops::FnOnce(__DropCheck #ty_generics_with_field_lt)
+            f: impl #field_lt_for_generics ::core::ops::FnOnce(__DropCheck #ty_generics_with_field_lt)
         ) #whr {
             #(#guards)*
 
@@ -676,6 +701,7 @@ fn generate_projections(
     ident: &Ident,
     generics: &Generics,
     fields: &[FieldInfo<'_>],
+    field_lt_generics: &Generics,
 ) -> TokenStream {
     let pin_lt = Lifetime::new("'__pin", Span::mixed_site());
 
@@ -687,19 +713,11 @@ fn generate_projections(
     );
     let (_, ty_generics_with_pin_lt, whr) = generics_with_pin_lt.split_for_impl();
 
-    let field_lt_params: Vec<_> = fields
-        .iter()
-        .filter(|f| f.borrowed.is_some())
-        .map(|f| {
-            GenericParam::Lifetime(LifetimeParam::new(Lifetime::from_ident(
-                f.field.ident.as_ref().unwrap(),
-            )))
-        })
-        .collect();
     let mut generics_with_field_lt = generics.clone();
     generics_with_field_lt
         .params
-        .extend(field_lt_params.iter().cloned());
+        .extend(field_lt_generics.params.iter().cloned());
+    let field_lt_for_generics = field_lt_generics.for_generics();
     let (_, ty_generics_with_field_lt, _) = generics_with_field_lt.split_for_impl();
 
     let mut generics_with_pin_field_lt = generics_with_field_lt.clone();
@@ -1002,7 +1020,7 @@ fn generate_projections(
             #[inline]
             #vis fn with_project<'__pin, R>(
                 self: ::core::pin::Pin<&'__pin mut Self>,
-                f: impl for<#(#field_lt_params,)*>::core::ops::FnOnce(__ProjectionLt #ty_generics_with_pin_field_lt) -> R
+                f: impl #field_lt_for_generics ::core::ops::FnOnce(__ProjectionLt #ty_generics_with_pin_field_lt) -> R
             ) -> R {
                 // SAFETY: we only give access to `&mut` for fields not structurally pinned.
                 let #this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
@@ -1022,22 +1040,14 @@ fn generate_the_pin_data(
     struct_name: &Ident,
     generics: &Generics,
     fields: &[FieldInfo<'_>],
+    field_lt_generics: &Generics,
 ) -> TokenStream {
-    let field_lt_params: Vec<_> = fields
-        .iter()
-        .filter(|f| f.borrowed.is_some())
-        .map(|f| {
-            GenericParam::Lifetime(LifetimeParam::new(Lifetime::from_ident(
-                f.field.ident.as_ref().unwrap(),
-            )))
-        })
-        .collect();
-
     let mut generics_with_field_lt = generics.clone();
     generics_with_field_lt
         .params
-        .extend(field_lt_params.iter().cloned());
+        .extend(field_lt_generics.params.iter().cloned());
 
+    let field_lt_for_generics = field_lt_generics.for_generics();
     let (impl_generics_with_lt, ty_generics_with_field_lt, _) =
         generics_with_field_lt.split_for_impl();
     let (impl_generics, ty_generics, whr) = generics.split_for_impl();
@@ -1181,14 +1191,14 @@ fn generate_the_pin_data(
             #[inline(always)]
             #vis fn __make_closure<__F, __E>(self, f: __F) -> __F
             where
-                __F: for<#(#field_lt_params,)*>::core::ops::FnOnce(*mut #struct_name #ty_generics, __PinDataLt #ty_generics_with_field_lt) ->
+                __F: #field_lt_for_generics  ::core::ops::FnOnce(*mut #struct_name #ty_generics, __PinDataLt #ty_generics_with_field_lt) ->
                     ::core::result::Result<::pin_init::__internal::InitOk, __E>,
             {
                 f
             }
 
             #[inline(always)]
-            fn __with_lt<#(#field_lt_params,)*>(self) -> __PinDataLt #ty_generics_with_field_lt {
+            fn __with_lt #field_lt_generics(self) -> __PinDataLt #ty_generics_with_field_lt {
                 __PinDataLt { __phantom: ::core::marker::PhantomData }
             }
         }
