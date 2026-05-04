@@ -2,12 +2,12 @@
 
 use std::collections::BTreeSet;
 
-use proc_macro2::Span;
-use quote::quote;
+use proc_macro2::{Span, TokenStream};
+use quote::{quote, ToTokens};
 use syn::punctuated::Punctuated;
 use syn::visit::Visit;
 use syn::visit_mut::VisitMut;
-use syn::{BoundLifetimes, GenericParam, Ident, LifetimeParam};
+use syn::{BoundLifetimes, GenericParam, Generics, Ident, LifetimeParam, Token};
 use syn::{Lifetime, Type};
 
 pub(crate) trait TypeExt {
@@ -208,5 +208,28 @@ impl LifetimeExt for Lifetime {
             apostrophe: ident.span(),
             ident: ident.clone(),
         }
+    }
+}
+
+pub(crate) struct ForGenerics<'a>(&'a Generics);
+
+pub(crate) trait GenericsExt {
+    fn for_generics(&self) -> ForGenerics<'_>;
+}
+
+impl GenericsExt for Generics {
+    fn for_generics(&self) -> ForGenerics<'_> {
+        ForGenerics(self)
+    }
+}
+
+impl ToTokens for ForGenerics<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        if self.0.params.is_empty() {
+            return;
+        }
+
+        <Token![for]>::default().to_tokens(tokens);
+        self.0.split_for_impl().1.to_tokens(tokens);
     }
 }
