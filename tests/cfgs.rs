@@ -20,3 +20,10 @@ impl Struct {
 }
 
 struct Field {}
+
+#[pin_data]
+pub struct Struct2 {
+    // Test for cases where the type is not even defined when cfg is not satisfied.
+    #[cfg(any())]
+    non_exist: NonExistentType,
+}
