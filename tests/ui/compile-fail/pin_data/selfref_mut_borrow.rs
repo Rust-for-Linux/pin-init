@@ -17,11 +17,10 @@ fn use_self_ref() {
         mut_part: &mut mut_str[..5],
     }));
 
-    // Should fail due to reference not being mutable.
-    *foo.as_mut().project().part = "foo";
-
-    // Should fail due to reference not being mutable.
-    foo.as_mut().project().mut_part.make_ascii_uppercase();
+    // Should fail due to not accessible.
+    foo.as_mut().with_project(|proj| {
+        let _ = proj.mut_str;
+    })
 }
 
 fn main() {

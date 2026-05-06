@@ -9,6 +9,10 @@ use core::marker::PhantomPinned;
 
 use super::*;
 
+// Polyfill for the unstable `UnsafePinned` type.
+#[repr(transparent)]
+pub struct UnsafePinned<T: ?Sized>(PhantomPinned, UnsafeCell<T>);
+
 /// Zero-sized type used to mark a type as invariant.
 ///
 /// This is a polyfill for the [unstable type] in the standard library of the same name.
@@ -366,6 +370,9 @@ impl<P, T: ?Sized> Drop for DropGuard<P, T> {
     }
 }
 
+pub struct Shared;
+pub struct Mutable;
+
 /// Represent an uninitialized field in a pinned struct that will be referenced by other fields.
 ///
 /// # Invariants
@@ -373,12 +380,12 @@ impl<P, T: ?Sized> Drop for DropGuard<P, T> {
 /// - `ptr` is valid, properly aligned and points to uninitialized and exclusively accessed memory
 ///   and will live longer than `'a`.
 /// - If `P` is `Pinned`, then `ptr` is structurally pinned.
-pub struct SelfRefSlot<'a, P, T: ?Sized> {
+pub struct SelfRefSlot<'a, M, P, T: ?Sized> {
     pub ptr: *mut T,
-    pub _phantom: PhantomData<(P, &'a mut T)>,
+    pub _phantom: PhantomData<(M, P, &'a mut T)>,
 }
 
-impl<'a, P, T: ?Sized> SelfRefSlot<'a, P, T> {
+impl<'a, M, P, T: ?Sized> SelfRefSlot<'a, M, P, T> {
     /// # Safety
     ///
     /// - `ptr` is valid, properly aligned and points to uninitialized and exclusively accessed
@@ -395,7 +402,7 @@ impl<'a, P, T: ?Sized> SelfRefSlot<'a, P, T> {
 
     /// Initialize the field by value.
     #[inline]
-    pub fn write(self, value: T) -> SelfRefDropGuard<'a, P, T>
+    pub fn write(self, value: T) -> SelfRefDropGuard<'a, M, P, T>
     where
         T: Sized,
     {
@@ -409,10 +416,10 @@ impl<'a, P, T: ?Sized> SelfRefSlot<'a, P, T> {
     }
 }
 
-impl<'a, T: ?Sized> SelfRefSlot<'a, Unpinned, T> {
+impl<'a, M, T: ?Sized> SelfRefSlot<'a, M, Unpinned, T> {
     /// Initialize the field.
     #[inline]
-    pub fn init<E>(self, init: impl Init<T, E>) -> Result<SelfRefDropGuard<'a, Unpinned, T>, E> {
+    pub fn init<E>(self, init: impl Init<T, E>) -> Result<SelfRefDropGuard<'a, M, Unpinned, T>, E> {
         // SAFETY:
         // - `self.ptr` is valid and properly aligned.
         // - when `Err` is returned, we also propagate the error without touching `slot`;
@@ -426,10 +433,13 @@ impl<'a, T: ?Sized> SelfRefSlot<'a, Unpinned, T> {
     }
 }
 
-impl<'a, T: ?Sized> SelfRefSlot<'a, Pinned, T> {
+impl<'a, M, T: ?Sized> SelfRefSlot<'a, M, Pinned, T> {
     /// Initialize the field.
     #[inline]
-    pub fn init<E>(self, init: impl PinInit<T, E>) -> Result<SelfRefDropGuard<'a, Pinned, T>, E> {
+    pub fn init<E>(
+        self,
+        init: impl PinInit<T, E>,
+    ) -> Result<SelfRefDropGuard<'a, M, Pinned, T>, E> {
         // SAFETY:
         // - `ptr` is valid
         // - when `Err` is returned, we also propagate the error without touching `ptr`;
@@ -452,12 +462,12 @@ impl<'a, T: ?Sized> SelfRefSlot<'a, Pinned, T> {
 /// - `ptr` is valid, properly aligned and live longer than `'a`.
 /// - `*ptr` is initialized and owned by this guard.
 /// - if `P` is `Pinned`, `ptr` is pinned.
-pub struct SelfRefDropGuard<'a, P, T: ?Sized> {
+pub struct SelfRefDropGuard<'a, M, P, T: ?Sized> {
     ptr: *mut T,
-    phantom: PhantomData<(P, &'a mut T)>,
+    phantom: PhantomData<(M, P, &'a mut T)>,
 }
 
-impl<'a, P, T: ?Sized> SelfRefDropGuard<'a, P, T> {
+impl<'a, M, P, T: ?Sized> SelfRefDropGuard<'a, M, P, T> {
     /// Creates a drop guard and transfer the ownership of the pointer content.
     ///
     /// The ownership is only relinquished if the guard is forgotten via [`core::mem::forget`].
@@ -477,7 +487,7 @@ impl<'a, P, T: ?Sized> SelfRefDropGuard<'a, P, T> {
     }
 }
 
-impl<'a, T: ?Sized> SelfRefDropGuard<'a, Unpinned, T> {
+impl<'a, T: ?Sized> SelfRefDropGuard<'a, Shared, Unpinned, T> {
     /// Create a let binding for accessor use.
     #[inline]
     pub fn let_binding(&mut self) -> &'a T {
@@ -486,7 +496,7 @@ impl<'a, T: ?Sized> SelfRefDropGuard<'a, Unpinned, T> {
     }
 }
 
-impl<'a, T: ?Sized> SelfRefDropGuard<'a, Pinned, T> {
+impl<'a, T: ?Sized> SelfRefDropGuard<'a, Shared, Pinned, T> {
     /// Create a let binding for accessor use.
     #[inline]
     pub fn let_binding(&mut self) -> Pin<&'a T> {
@@ -496,7 +506,26 @@ impl<'a, T: ?Sized> SelfRefDropGuard<'a, Pinned, T> {
     }
 }
 
-impl<P, T: ?Sized> Drop for SelfRefDropGuard<'_, P, T> {
+impl<'a, T: ?Sized> SelfRefDropGuard<'a, Mutable, Unpinned, T> {
+    /// Create a let binding for accessor use.
+    #[inline]
+    pub fn let_binding(&mut self) -> &'a mut T {
+        // SAFETY: Per type invariant.
+        unsafe { &mut *self.ptr }
+    }
+}
+
+impl<'a, T: ?Sized> SelfRefDropGuard<'a, Mutable, Pinned, T> {
+    /// Create a let binding for accessor use.
+    #[inline]
+    pub fn let_binding(&mut self) -> Pin<&'a mut T> {
+        // SAFETY: `self.ptr` is valid, properly aligned, live longer than `'a`, initialized,
+        // exclusively accessible and pinned per type invariant.
+        unsafe { Pin::new_unchecked(&mut *self.ptr) }
+    }
+}
+
+impl<M, P, T: ?Sized> Drop for SelfRefDropGuard<'_, M, P, T> {
     #[inline]
     fn drop(&mut self) {
         // SAFETY: `self.ptr` is valid, properly aligned and `*self.ptr` is owned by this guard.

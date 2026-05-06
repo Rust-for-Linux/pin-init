@@ -430,6 +430,14 @@ fn generate_struct_def(
             >);
         };
 
+        // For mutably referenced items, it is possible to access `&struct.field` through `Pin<&mut
+        // Struct>`, which conflicts with the mutable access possible via the mutable borrow when
+        // constructing. Wrap the type behind `UnsafePinned` so it's not UB to have both and it also
+        // blocks user from doing anything wiht the value (safely).
+        if field.borrowed == Some(Borrowed::Mutable) {
+            ty = parse_quote!(::pin_init::__internal::UnsafePinned<#ty>);
+        }
+
         generated_fields.push(quote! {
            #(#attrs)* #vis #ident #colon_token #ty
         });
@@ -1055,7 +1063,6 @@ fn generate_the_pin_data(
 
     let field_accessors = fields
         .iter()
-        .filter(|f| f.borrowed != Some(Borrowed::Mutable))
         .map(|f| {
             let vis = &f.field.vis;
             let field_name = f
@@ -1089,9 +1096,24 @@ fn generate_the_pin_data(
                     // assumptions on the lifetime except for those implied by the struct's bounds,
                     // and we have validated them in `generate_drop_check`.
                     quote!(SelfRefSlot),
-                    quote!(#lt,),
+                    quote!(#lt, ::pin_init::__internal::Shared, ),
                 ),
-                Some(Borrowed::Mutable) => unreachable!(),
+                Some(Borrowed::Mutable) => (
+                    // For borrowed fields, create a `SelfRefSlot`, which after initialization
+                    // turns into a `SelfRefDropGuard` instead of `DropGuard`.
+                    //
+                    // They're mostly the same, except that `SelfRefDropGuard` returns `&'field T`
+                    // instead of `&'guard T` for let bindings; this allows it to be used to be
+                    // used to initialize other fields.
+                    //
+                    // The soundness of doing so relies on fact that `__make_init` requires a
+                    // higher-ranked trait bound on the closure. Within the closure (which is the
+                    // caller of the generated slot projection functions here), it can make no
+                    // assumptions on the lifetime except for those implied by the struct's bounds,
+                    // and we have validated them in `generate_drop_check`.
+                    quote!(SelfRefSlot),
+                    quote!(#lt, ::pin_init::__internal::Mutable, ),
+                ),
             };
 
             quote! {

@@ -1,5 +1,11 @@
 error[E0594]: cannot assign to data in a `&` reference
-  --> tests/ui/compile-fail/pin_data/selfref_project_mut.rs:16:5
+  --> tests/ui/compile-fail/pin_data/selfref_project_mut.rs:21:5
    |
-16 |     *foo.as_mut().project().part = "foo";
+21 |     *foo.as_mut().project().part = "foo";
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot assign
+
+error[E0596]: cannot borrow data in a `&` reference as mutable
+  --> tests/ui/compile-fail/pin_data/selfref_project_mut.rs:24:5
+   |
+24 |     foo.as_mut().project().mut_part.make_ascii_uppercase();
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot borrow as mutable
