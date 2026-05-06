@@ -1,0 +1,24 @@
+error[E0502]: cannot borrow value as mutable because it is also borrowed as immutable
+  --> tests/ui/compile-fail/pin_data/selfref_mut_borrowck.rs:15:24
+   |
+14 |         part: &str[..5],
+   |         ----   --- immutable borrow occurs here
+   |         |
+   |         immutable borrow later used here
+15 |         mut_part: &mut str[..5],
+   |                        ^^^ mutable borrow occurs here
+
+error[E0502]: cannot borrow value as mutable because it is also borrowed as immutable
+  --> tests/ui/compile-fail/pin_data/selfref_mut_borrowck.rs:15:24
+   |
+12 |       stack_pin_init!(let foo = pin_init!(SelfRef {
+   |  _______________________________-
+13 | |         str: "hello world".to_owned(),
+14 | |         part: &str[..5],
+   | |         ----   --- immutable borrow occurs here
+   | |         |
+   | |         argument requires that immutable borrow lasts for `'1`
+15 | |         mut_part: &mut str[..5],
+   | |                        ^^^ mutable borrow occurs here
+16 | |     }));
+   | |______- has type `__PinDataLt<'1>`
