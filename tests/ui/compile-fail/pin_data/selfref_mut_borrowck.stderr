@@ -1,0 +1,15 @@
+error[E0502]: cannot borrow `*str` as mutable because it is also borrowed as immutable
+  --> tests/ui/compile-fail/pin_data/selfref_mut_borrowck.rs:15:24
+   |
+12 |       stack_pin_init!(let foo = pin_init!(SelfRef {
+   |  _______________________________-
+13 | |         str: "hello world".to_owned(),
+14 | |         part: &str[..5],
+   | |                --- immutable borrow occurs here
+15 | |         mut_part: &mut str[..5],
+   | |                        ^^^ mutable borrow occurs here
+16 | |     }));
+   | |      -
+   | |      |
+   | |______has type `__PinDataLt<'1>`
+   |        argument requires that `*str` is borrowed for `'1`

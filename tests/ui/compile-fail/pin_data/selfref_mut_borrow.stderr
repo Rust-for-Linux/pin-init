@@ -1,0 +1,7 @@
+error[E0609]: no field `mut_str` on type `__ProjectionLt<'_, '_, '_>`
+  --> tests/ui/compile-fail/pin_data/selfref_mut_borrow.rs:22:22
+   |
+22 |         let _ = proj.mut_str;
+   |                      ^^^^^^^ unknown field
+   |
+   = note: available fields are: `part`, `str`, `mut_part`, `___pin_phantom_data`
