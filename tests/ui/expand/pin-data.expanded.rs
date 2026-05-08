@@ -35,7 +35,7 @@ impl Foo {
 const _: () = {
     #[doc(hidden)]
     struct __ThePinData {
-        __phantom: ::core::marker::PhantomData<fn(Foo) -> Foo>,
+        __phantom: ::pin_init::__internal::PhantomInvariant<Foo>,
     }
     impl ::core::clone::Clone for __ThePinData {
         fn clone(&self) -> Self {
@@ -94,7 +94,7 @@ const _: () = {
         type PinData = __ThePinData;
         unsafe fn __pin_data() -> Self::PinData {
             __ThePinData {
-                __phantom: ::core::marker::PhantomData,
+                __phantom: ::pin_init::__internal::PhantomInvariant::new(),
             }
         }
     }
@@ -103,8 +103,8 @@ const _: () = {
     }
     #[allow(dead_code)]
     struct __Unpin<'__pin> {
-        __phantom_pin: ::core::marker::PhantomData<fn(&'__pin ()) -> &'__pin ()>,
-        __phantom: ::core::marker::PhantomData<fn(Foo) -> Foo>,
+        __phantom_pin: ::pin_init::__internal::PhantomInvariantLifetime<'__pin>,
+        __phantom: ::pin_init::__internal::PhantomInvariant<Foo>,
         _pin: PhantomPinned,
     }
     #[doc(hidden)]

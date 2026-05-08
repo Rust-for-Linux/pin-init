@@ -55,9 +55,7 @@ const _: () = {
     where
         T: Bar<'a, 1>,
     {
-        __phantom: ::core::marker::PhantomData<
-            fn(Foo<'a, 'b, T, SIZE>) -> Foo<'a, 'b, T, SIZE>,
-        >,
+        __phantom: ::pin_init::__internal::PhantomInvariant<Foo<'a, 'b, T, SIZE>>,
     }
     impl<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize> ::core::clone::Clone
     for __ThePinData<'a, 'b, T, SIZE>
@@ -161,7 +159,7 @@ const _: () = {
         type PinData = __ThePinData<'a, 'b, T, SIZE>;
         unsafe fn __pin_data() -> Self::PinData {
             __ThePinData {
-                __phantom: ::core::marker::PhantomData,
+                __phantom: ::pin_init::__internal::PhantomInvariant::new(),
             }
         }
     }
@@ -181,10 +179,8 @@ const _: () = {
     where
         T: Bar<'a, 1>,
     {
-        __phantom_pin: ::core::marker::PhantomData<fn(&'__pin ()) -> &'__pin ()>,
-        __phantom: ::core::marker::PhantomData<
-            fn(Foo<'a, 'b, T, SIZE>) -> Foo<'a, 'b, T, SIZE>,
-        >,
+        __phantom_pin: ::pin_init::__internal::PhantomInvariantLifetime<'__pin>,
+        __phantom: ::pin_init::__internal::PhantomInvariant<Foo<'a, 'b, T, SIZE>>,
         _pin: PhantomPinned,
     }
     #[doc(hidden)]
