@@ -32,6 +32,9 @@ libc = "0.2"
 trybuild = { version = "1.0", features = ["diff"] }
 macrotest = "1.0"
 
+# For capturing symbol names
+backtrace = "0.3"
+
 [lints.rust]
 stable_features = "allow"
 unused_features = "allow"
