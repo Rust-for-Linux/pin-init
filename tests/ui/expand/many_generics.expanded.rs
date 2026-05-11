@@ -82,6 +82,16 @@ const _: () = {
     where
         T: Bar<'a, 1>,
     {
+        /// Type inference helper function.
+        #[inline(always)]
+        fn __make_closure<__F, __E>(self, f: __F) -> __F
+        where
+            __F: FnOnce(
+                *mut Foo<'a, 'b, T, SIZE>,
+            ) -> ::core::result::Result<::pin_init::__internal::InitOk, __E>,
+        {
+            f
+        }
         /// # Safety
         ///
         /// - `slot` is a valid pointer to uninitialized memory.
@@ -183,17 +193,6 @@ const _: () = {
                 __phantom: ::pin_init::__internal::PhantomInvariant::new(),
             }
         }
-    }
-    unsafe impl<
-        'a,
-        'b: 'a,
-        T: Bar<'b> + ?Sized + 'a,
-        const SIZE: usize,
-    > ::pin_init::__internal::PinData for __ThePinData<'a, 'b, T, SIZE>
-    where
-        T: Bar<'a, 1>,
-    {
-        type Datee = Foo<'a, 'b, T, SIZE>;
     }
     #[allow(dead_code)]
     struct __Unpin<'__pin, 'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>

@@ -6,17 +6,15 @@ fn main() {
             use ::pin_init::__internal::HasInitData;
             Foo::__init_data()
         };
-        let init = ::pin_init::__internal::InitData::make_closure::<
-            _,
-            ::core::convert::Infallible,
-        >(
-            __data,
-            move |slot| {
+        let init = __data
+            .__make_closure::<
+                _,
+                ::core::convert::Infallible,
+            >(move |slot| {
                 #[allow(unreachable_code, clippy::diverging_sub_expression)]
                 let _ = || unsafe { ::core::ptr::write(slot, Foo {}) };
                 Ok(unsafe { ::pin_init::__internal::InitOk::new() })
-            },
-        );
+            });
         let init = move |
             slot,
         | -> ::core::result::Result<(), ::core::convert::Infallible> {
