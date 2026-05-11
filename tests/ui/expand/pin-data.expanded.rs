@@ -49,8 +49,8 @@ const _: () = {
         /// # Safety
         ///
         /// - `slot` is a valid pointer to uninitialized memory.
-        /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
-        ///   to deallocate.
+        /// - the caller does not touch `slot` when `Err` is returned, they are only
+        ///   permitted to deallocate.
         unsafe fn array<E>(
             self,
             slot: *mut [u8; 1024 * 1024],
@@ -70,8 +70,8 @@ const _: () = {
         /// # Safety
         ///
         /// - `slot` is a valid pointer to uninitialized memory.
-        /// - the caller does not touch `slot` when `Err` is returned, they are only permitted
-        ///   to deallocate.
+        /// - the caller does not touch `slot` when `Err` is returned, they are only
+        ///   permitted to deallocate.
         /// - `slot` will not move until it is dropped, i.e. it will be pinned.
         unsafe fn _pin<E>(
             self,
