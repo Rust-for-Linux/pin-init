@@ -46,6 +46,16 @@ const _: () = {
     #[allow(dead_code)]
     #[expect(clippy::missing_safety_doc)]
     impl __ThePinData {
+        /// Type inference helper function.
+        #[inline(always)]
+        fn __make_closure<__F, __E>(self, f: __F) -> __F
+        where
+            __F: FnOnce(
+                *mut Foo,
+            ) -> ::core::result::Result<::pin_init::__internal::InitOk, __E>,
+        {
+            f
+        }
         /// # Safety
         ///
         /// - `slot` is valid and properly aligned.
@@ -86,9 +96,6 @@ const _: () = {
                 __phantom: ::pin_init::__internal::PhantomInvariant::new(),
             }
         }
-    }
-    unsafe impl ::pin_init::__internal::PinData for __ThePinData {
-        type Datee = Foo;
     }
     #[allow(dead_code)]
     struct __Unpin<'__pin> {
