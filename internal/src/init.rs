@@ -334,7 +334,7 @@ fn make_field_check(
         }),
     };
     quote! {
-        #[allow(unreachable_code, clippy::diverging_sub_expression)]
+        #[allow(unreachable_code)]
         // We use unreachable code to perform field checks. They're still checked by the compiler.
         // SAFETY: this code is never executed.
         let _ = || unsafe {

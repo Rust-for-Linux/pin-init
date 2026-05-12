@@ -11,7 +11,7 @@ fn main() {
                 _,
                 ::core::convert::Infallible,
             >(move |slot| {
-                #[allow(unreachable_code, clippy::diverging_sub_expression)]
+                #[allow(unreachable_code)]
                 let _ = || unsafe { ::core::ptr::write(slot, Foo {}) };
                 Ok(unsafe { ::pin_init::__internal::InitOk::new() })
             });
