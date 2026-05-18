@@ -1,10 +1,10 @@
-error[E0277]: the trait bound `impl pin_init::PinInit<Bar>: Init<Bar>` is not satisfied
+error[E0277]: the trait bound `impl pin_init::PinInit<Bar>: Init<Bar, _>` is not satisfied
   --> tests/ui/compile-fail/init/invalid_init.rs:19:16
    |
 18 |       let _ = init!(Foo {
    |  _____________-
 19 | |         bar <- Bar::new(),
-   | |                ^^^^^^^^^^ the trait `Init<Bar>` is not implemented for `impl pin_init::PinInit<Bar>`
+   | |                ^^^^^^^^^^ the trait `Init<Bar, _>` is not implemented for `impl pin_init::PinInit<Bar>`
 20 | |     });
    | |______- required by a bound introduced by this call
    |
@@ -19,3 +19,8 @@ help: the following other types implement trait `Init<T, E>`
 ...
    |   unsafe impl<T, E> Init<T, E> for Result<T, E> {
    |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Result<T, E>`
+note: required by a bound in `pin_init::__internal::Slot::<pin_init::__internal::Unpinned, T>::init`
+  --> src/__internal.rs
+   |
+   |     pub fn init<E>(self, init: impl Init<T, E>) -> Result<DropGuard<Unpinned, T>, E> {
+   |                                     ^^^^^^^^^^ required by this bound in `Slot::<Unpinned, T>::init`

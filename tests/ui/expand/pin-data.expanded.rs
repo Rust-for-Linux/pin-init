@@ -46,48 +46,47 @@ const _: () = {
     #[allow(dead_code)]
     #[expect(clippy::missing_safety_doc)]
     impl __ThePinData {
-        /// # Safety
-        ///
-        /// - `slot` is a valid pointer to uninitialized memory.
-        /// - the caller does not touch `slot` when `Err` is returned, they are only
-        ///   permitted to deallocate.
-        unsafe fn array<E>(
-            self,
-            slot: *mut [u8; 1024 * 1024],
-            init: impl ::pin_init::Init<[u8; 1024 * 1024], E>,
-        ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::Init::__init(init, slot) }
+        /// Type inference helper function.
+        #[inline(always)]
+        fn __make_closure<__F, __E>(self, f: __F) -> __F
+        where
+            __F: FnOnce(
+                *mut Foo,
+            ) -> ::core::result::Result<::pin_init::__internal::InitOk, __E>,
+        {
+            f
         }
         /// # Safety
         ///
-        /// `slot` points at the field `array` inside of `Foo`, which is pinned.
-        unsafe fn __project_array<'__slot>(
+        /// - `slot` is valid and properly aligned.
+        /// - `(*slot).#field_name` is properly aligned.
+        /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
+        ///   memory.
+        #[inline(always)]
+        unsafe fn array(
             self,
-            slot: &'__slot mut [u8; 1024 * 1024],
-        ) -> &'__slot mut [u8; 1024 * 1024] {
-            slot
+            slot: *mut Foo,
+        ) -> ::pin_init::__internal::Slot<
+            ::pin_init::__internal::Unpinned,
+            [u8; 1024 * 1024],
+        > {
+            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot).array) }
         }
         /// # Safety
         ///
-        /// - `slot` is a valid pointer to uninitialized memory.
-        /// - the caller does not touch `slot` when `Err` is returned, they are only
-        ///   permitted to deallocate.
-        /// - `slot` will not move until it is dropped, i.e. it will be pinned.
-        unsafe fn _pin<E>(
+        /// - `slot` is valid and properly aligned.
+        /// - `(*slot).#field_name` is properly aligned.
+        /// - `(*slot).#field_name` points to uninitialized and exclusively accessed
+        ///   memory.
+        #[inline(always)]
+        unsafe fn _pin(
             self,
-            slot: *mut PhantomPinned,
-            init: impl ::pin_init::PinInit<PhantomPinned, E>,
-        ) -> ::core::result::Result<(), E> {
-            unsafe { ::pin_init::PinInit::__pinned_init(init, slot) }
-        }
-        /// # Safety
-        ///
-        /// `slot` points at the field `_pin` inside of `Foo`, which is pinned.
-        unsafe fn __project__pin<'__slot>(
-            self,
-            slot: &'__slot mut PhantomPinned,
-        ) -> ::core::pin::Pin<&'__slot mut PhantomPinned> {
-            unsafe { ::core::pin::Pin::new_unchecked(slot) }
+            slot: *mut Foo,
+        ) -> ::pin_init::__internal::Slot<
+            ::pin_init::__internal::Pinned,
+            PhantomPinned,
+        > {
+            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot)._pin) }
         }
     }
     unsafe impl ::pin_init::__internal::HasPinData for Foo {
@@ -97,9 +96,6 @@ const _: () = {
                 __phantom: ::pin_init::__internal::PhantomInvariant::new(),
             }
         }
-    }
-    unsafe impl ::pin_init::__internal::PinData for __ThePinData {
-        type Datee = Foo;
     }
     #[allow(dead_code)]
     struct __Unpin<'__pin> {

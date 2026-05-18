@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, quote_spanned};
+use quote::{format_ident, quote};
 use syn::{
     braced,
     parse::{End, Parse},
@@ -103,17 +103,15 @@ pub(crate) fn expand(
         |(_, err)| Box::new(err),
     );
     let slot = format_ident!("slot");
-    let (has_data_trait, data_trait, get_data, init_from_closure) = if pinned {
+    let (has_data_trait, get_data, init_from_closure) = if pinned {
         (
             format_ident!("HasPinData"),
-            format_ident!("PinData"),
             format_ident!("__pin_data"),
             format_ident!("pin_init_from_closure"),
         )
     } else {
         (
             format_ident!("HasInitData"),
-            format_ident!("InitData"),
             format_ident!("__init_data"),
             format_ident!("init_from_closure"),
         )
@@ -157,8 +155,7 @@ pub(crate) fn expand(
             #path::#get_data()
         };
         // Ensure that `#data` really is of type `#data` and help with type inference:
-        let init = ::pin_init::__internal::#data_trait::make_closure::<_, #error>(
-            #data,
+        let init = #data.__make_closure::<_, #error>(
             move |slot| {
                 #zeroable_check
                 #this
@@ -231,107 +228,80 @@ fn init_fields(
             cfgs.retain(|attr| attr.path().is_ident("cfg"));
             cfgs
         };
-        let init = match kind {
-            InitializerKind::Value { ident, value } => {
-                let mut value_ident = ident.clone();
-                let value_prep = value.as_ref().map(|value| &value.1).map(|value| {
-                    // Setting the span of `value_ident` to `value`'s span improves error messages
-                    // when the type of `value` is wrong.
-                    value_ident.set_span(value.span());
-                    quote!(let #value_ident = #value;)
+
+        let ident = match kind {
+            InitializerKind::Value { ident, .. } => ident,
+            InitializerKind::Init { ident, .. } => ident,
+            InitializerKind::Code { block, .. } => {
+                res.extend(quote! {
+                    #(#attrs)*
+                    #[allow(unused_braces)]
+                    #block
                 });
-                // Again span for better diagnostics
-                let write = quote_spanned!(ident.span()=> ::core::ptr::write);
-                quote! {
-                    #(#attrs)*
-                    {
-                        #value_prep
-                        // SAFETY: TODO
-                        unsafe { #write(&raw mut (*#slot).#ident, #value_ident) };
-                    }
-                }
+                continue;
             }
-            InitializerKind::Init { ident, value, .. } => {
-                // Again span for better diagnostics
-                let init = format_ident!("init", span = value.span());
-                let value_init = if pinned {
-                    quote! {
-                        // SAFETY:
-                        // - `slot` is valid, because we are inside of an initializer closure, we
-                        //   return when an error/panic occurs.
-                        // - We also use `#data` to require the correct trait (`Init` or `PinInit`)
-                        //   for `#ident`.
-                        unsafe { #data.#ident(&raw mut (*#slot).#ident, #init)? };
-                    }
-                } else {
-                    quote! {
-                        // SAFETY: `slot` is valid, because we are inside of an initializer
-                        // closure, we return when an error/panic occurs.
-                        unsafe {
-                            ::pin_init::Init::__init(
-                                #init,
-                                &raw mut (*#slot).#ident,
-                            )?
-                        };
-                    }
-                };
-                quote! {
-                    #(#attrs)*
-                    {
-                        let #init = #value;
-                        #value_init
-                    }
-                }
-            }
-            InitializerKind::Code { block: value, .. } => quote! {
-                #(#attrs)*
-                #[allow(unused_braces)]
-                #value
-            },
         };
-        res.extend(init);
-        if let Some(ident) = kind.ident() {
-            // `mixed_site` ensures that the guard is not accessible to the user-controlled code.
-            let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
 
-            // NOTE: The reference is derived from the guard so that it only lives as long as the
-            // guard does and cannot escape the scope. If it's created via `&mut (*#slot).#ident`
-            // like the unaligned field guard, it will become effectively `'static`.
-            let accessor = if pinned {
-                let project_ident = format_ident!("__project_{ident}");
-                quote! {
-                    // SAFETY: the initialization is pinned.
-                    unsafe { #data.#project_ident(#guard.let_binding()) }
-                }
-            } else {
-                quote! {
-                    #guard.let_binding()
-                }
-            };
-
-            res.extend(quote! {
-                #(#cfgs)*
-                // Create the drop guard.
-                //
+        let slot = if pinned {
+            quote! {
+                // SAFETY:
+                // - `slot` is valid and properly aligned.
+                // - `make_field_check` checks that `&raw mut (*slot).#ident` is properly aligned.
+                // - `make_field_check` prevents `#ident` from being used twice, therefore
+                //   `(*slot).#ident` is exclusively accessed and has not been initialized.
+                (unsafe { #data.#ident(#slot) })
+            }
+        } else {
+            quote! {
+                // For `init!()` macro, everything is unpinned.
                 // SAFETY:
                 // - `&raw mut (*slot).#ident` is valid.
                 // - `make_field_check` checks that `&raw mut (*slot).#ident` is properly aligned.
-                // - `(*slot).#ident` has been initialized above.
-                // - We only need the ownership to the pointee back when initialization has
-                //   succeeded, where we `forget` the guard.
-                let mut #guard = unsafe {
-                    ::pin_init::__internal::DropGuard::new(
-                        &raw mut (*slot).#ident
+                // - `make_field_check` prevents `#ident` from being used twice, therefore
+                //   `(*slot).#ident` is exclusively accessed and has not been initialized.
+                (unsafe {
+                    ::pin_init::__internal::Slot::<::pin_init::__internal::Unpinned, _>::new(
+                        &raw mut (*#slot).#ident
                     )
-                };
+                })
+            }
+        };
 
-                #(#cfgs)*
-                #[allow(unused_variables)]
-                let #ident = #accessor;
-            });
-            guards.push(guard);
-            guard_attrs.push(cfgs);
-        }
+        // `mixed_site` ensures that the guard is not accessible to the user-controlled code.
+        let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
+
+        let init = match kind {
+            InitializerKind::Value { ident, value } => {
+                let value = value
+                    .as_ref()
+                    .map(|(_, value)| quote!(#value))
+                    .unwrap_or_else(|| quote!(#ident));
+
+                quote! {
+                    #(#attrs)*
+                    let mut #guard = #slot.write(#value);
+
+                }
+            }
+            InitializerKind::Init { value, .. } => {
+                quote! {
+                    #(#attrs)*
+                    let mut #guard = #slot.init(#value)?;
+                }
+            }
+            InitializerKind::Code { .. } => unreachable!(),
+        };
+
+        res.extend(quote! {
+            #init
+
+            #(#cfgs)*
+            #[allow(unused_variables)]
+            let #ident = #guard.let_binding();
+        });
+
+        guards.push(guard);
+        guard_attrs.push(cfgs);
     }
     quote! {
         #res

@@ -113,28 +113,10 @@ impl InitOk {
 ///
 /// Only the `init` module is allowed to use this trait.
 pub unsafe trait HasPinData {
-    type PinData: PinData;
+    type PinData;
 
     #[expect(clippy::missing_safety_doc)]
     unsafe fn __pin_data() -> Self::PinData;
-}
-
-/// Marker trait for pinning data of structs.
-///
-/// # Safety
-///
-/// Only the `init` module is allowed to use this trait.
-pub unsafe trait PinData: Copy {
-    type Datee: ?Sized + HasPinData;
-
-    /// Type inference helper function.
-    #[inline(always)]
-    fn make_closure<F, E>(self, f: F) -> F
-    where
-        F: FnOnce(*mut Self::Datee) -> Result<InitOk, E>,
-    {
-        f
-    }
 }
 
 /// This trait is automatically implemented for every type. It aims to provide the same type
@@ -144,28 +126,10 @@ pub unsafe trait PinData: Copy {
 ///
 /// Only the `init` module is allowed to use this trait.
 pub unsafe trait HasInitData {
-    type InitData: InitData;
+    type InitData;
 
     #[expect(clippy::missing_safety_doc)]
     unsafe fn __init_data() -> Self::InitData;
-}
-
-/// Same function as `PinData`, but for arbitrary data.
-///
-/// # Safety
-///
-/// Only the `init` module is allowed to use this trait.
-pub unsafe trait InitData: Copy {
-    type Datee: ?Sized + HasInitData;
-
-    /// Type inference helper function.
-    #[inline(always)]
-    fn make_closure<F, E>(self, f: F) -> F
-    where
-        F: FnOnce(*mut Self::Datee) -> Result<InitOk, E>,
-    {
-        f
-    }
 }
 
 pub struct AllData<T: ?Sized>(PhantomInvariant<T>);
@@ -178,9 +142,15 @@ impl<T: ?Sized> Clone for AllData<T> {
 
 impl<T: ?Sized> Copy for AllData<T> {}
 
-// SAFETY: TODO.
-unsafe impl<T: ?Sized> InitData for AllData<T> {
-    type Datee = T;
+impl<T: ?Sized> AllData<T> {
+    /// Type inference helper function.
+    #[inline(always)]
+    pub fn __make_closure<F, E>(self, f: F) -> F
+    where
+        F: FnOnce(*mut T) -> Result<InitOk, E>,
+    {
+        f
+    }
 }
 
 // SAFETY: TODO.
@@ -277,6 +247,87 @@ fn stack_init_reuse() {
     println!("{value:?}");
 }
 
+// Marker types that determines type of `DropGuard`'s let bindings.
+pub struct Pinned;
+pub struct Unpinned;
+
+/// Represent an uninitialized field.
+///
+/// # Invariants
+///
+/// - `ptr` is valid, properly aligned and points to uninitialized and exclusively accessed memory.
+/// - If `P` is `Pinned`, then `ptr` is structurally pinned.
+pub struct Slot<P, T: ?Sized> {
+    ptr: *mut T,
+    _phantom: PhantomData<P>,
+}
+
+impl<P, T: ?Sized> Slot<P, T> {
+    /// # Safety
+    ///
+    /// - `ptr` is valid, properly aligned and points to uninitialized and exclusively accessed
+    ///   memory.
+    /// - If `P` is `Pinned`, then `ptr` is structurally pinned.
+    #[inline(always)]
+    pub unsafe fn new(ptr: *mut T) -> Self {
+        // INVARIANT: Per safety requirement.
+        Self {
+            ptr,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Initialize the field by value.
+    #[inline(always)]
+    pub fn write(self, value: T) -> DropGuard<P, T>
+    where
+        T: Sized,
+    {
+        // SAFETY: `self.ptr` is a valid and aligned pointer for write.
+        unsafe { self.ptr.write(value) }
+        // SAFETY:
+        // - `self.ptr` is valid and properly aligned per type invariant.
+        // - `*self.ptr` is initialized above and the ownership is transferred to the guard.
+        // - If `P` is `Pinned`, `self.ptr` is pinned.
+        unsafe { DropGuard::new(self.ptr) }
+    }
+}
+
+impl<T: ?Sized> Slot<Unpinned, T> {
+    /// Initialize the field.
+    #[inline(always)]
+    pub fn init<E>(self, init: impl Init<T, E>) -> Result<DropGuard<Unpinned, T>, E> {
+        // SAFETY:
+        // - `self.ptr` is valid and properly aligned.
+        // - when `Err` is returned, we also propagate the error without touching `slot`;
+        //   also `self` is consumed so it cannot be touched further.
+        unsafe { init.__init(self.ptr)? };
+
+        // SAFETY:
+        // - `self.ptr` is valid and properly aligned per type invariant.
+        // - `*self.ptr` is initialized above and the ownership is transferred to the guard.
+        Ok(unsafe { DropGuard::new(self.ptr) })
+    }
+}
+
+impl<T: ?Sized> Slot<Pinned, T> {
+    /// Initialize the field.
+    #[inline(always)]
+    pub fn init<E>(self, init: impl PinInit<T, E>) -> Result<DropGuard<Pinned, T>, E> {
+        // SAFETY:
+        // - `self.ptr` is valid and properly aligned.
+        // - when `Err` is returned, we also propagate the error without touching `ptr`;
+        //   also `self` is consumed so it cannot be touched further.
+        // - the drop guard will not hand out `&mut` (only `Pin<&mut T>`).
+        unsafe { init.__pinned_init(self.ptr)? };
+
+        // SAFETY:
+        // - `self.ptr` is valid, properly aligned and pinned per type invariant.
+        // - `*self.ptr` is initialized above and the ownership is transferred to the guard.
+        Ok(unsafe { DropGuard::new(self.ptr) })
+    }
+}
+
 /// When a value of this type is dropped, it drops a `T`.
 ///
 /// Can be forgotten to prevent the drop.
@@ -285,11 +336,13 @@ fn stack_init_reuse() {
 ///
 /// - `ptr` is valid and properly aligned.
 /// - `*ptr` is initialized and owned by this guard.
-pub struct DropGuard<T: ?Sized> {
+/// - if `P` is `Pinned`, `ptr` is pinned.
+pub struct DropGuard<P, T: ?Sized> {
     ptr: *mut T,
+    phantom: PhantomData<P>,
 }
 
-impl<T: ?Sized> DropGuard<T> {
+impl<P, T: ?Sized> DropGuard<P, T> {
     /// Creates a drop guard and transfer the ownership of the pointer content.
     ///
     /// The ownership is only relinguished if the guard is forgotten via [`core::mem::forget`].
@@ -298,12 +351,18 @@ impl<T: ?Sized> DropGuard<T> {
     ///
     /// - `ptr` is valid and properly aligned.
     /// - `*ptr` is initialized, and the ownership is transferred to this guard.
+    /// - if `P` is `Pinned`, `ptr` is pinned.
     #[inline]
     pub unsafe fn new(ptr: *mut T) -> Self {
         // INVARIANT: By safety requirement.
-        Self { ptr }
+        Self {
+            ptr,
+            phantom: PhantomData,
+        }
     }
+}
 
+impl<T: ?Sized> DropGuard<Unpinned, T> {
     /// Create a let binding for accessor use.
     #[inline]
     pub fn let_binding(&mut self) -> &mut T {
@@ -312,7 +371,17 @@ impl<T: ?Sized> DropGuard<T> {
     }
 }
 
-impl<T: ?Sized> Drop for DropGuard<T> {
+impl<T: ?Sized> DropGuard<Pinned, T> {
+    /// Create a let binding for accessor use.
+    #[inline]
+    pub fn let_binding(&mut self) -> Pin<&mut T> {
+        // SAFETY: `self.ptr` is valid, properly aligned, initialized, exclusively accessible and
+        // pinned per type invariant.
+        unsafe { Pin::new_unchecked(&mut *self.ptr) }
+    }
+}
+
+impl<P, T: ?Sized> Drop for DropGuard<P, T> {
     #[inline]
     fn drop(&mut self) {
         // SAFETY: `self.ptr` is valid, properly aligned and `*self.ptr` is owned by this guard.
