@@ -966,12 +966,17 @@ where
     unsafe fn __pinned_init(self, slot: *mut T) -> Result<(), E> {
         // SAFETY: All requirements fulfilled since this function is `__pinned_init`.
         unsafe { self.0.__pinned_init(slot)? };
-        // SAFETY: The above call initialized `slot` and we still have unique access.
+        // SAFETY: The above call initialized `slot`. The guard drops it if `self.1` returns
+        // `Err` or panics.
+        let guard = unsafe { __internal::DropGuard::new(slot) };
+        // SAFETY: `slot` was initialized above. Excluding the guard (which only drops) we
+        // have unique access to it.
         let val = unsafe { &mut *slot };
         // SAFETY: `slot` is considered pinned.
         let val = unsafe { Pin::new_unchecked(val) };
-        // SAFETY: `slot` was initialized above.
-        (self.1)(val).inspect_err(|_| unsafe { core::ptr::drop_in_place(slot) })
+        (self.1)(val)?;
+        core::mem::forget(guard);
+        Ok(())
     }
 }
 
@@ -1073,10 +1078,14 @@ where
     unsafe fn __init(self, slot: *mut T) -> Result<(), E> {
         // SAFETY: All requirements fulfilled since this function is `__init`.
         unsafe { self.0.__pinned_init(slot)? };
-        // SAFETY: The above call initialized `slot` and we still have unique access.
-        (self.1)(unsafe { &mut *slot }).inspect_err(|_|
-            // SAFETY: `slot` was initialized above.
-            unsafe { core::ptr::drop_in_place(slot) })
+        // SAFETY: The above call initialized `slot`. The guard drops it if `self.1` returns
+        // `Err` or panics.
+        let guard = unsafe { __internal::DropGuard::new(slot) };
+        // SAFETY: `slot` was initialized above. Excluding the guard (which only drops) we
+        // have unique access to it.
+        (self.1)(unsafe { &mut *slot })?;
+        core::mem::forget(guard);
+        Ok(())
     }
 }
 
@@ -1163,6 +1172,116 @@ pub fn uninit<T, E>() -> impl Init<MaybeUninit<T>, E> {
     unsafe { init_from_closure(|_| Ok(())) }
 }
 
+/// Allows safe (pinned and non-pinned) initialization of an array.
+///
+/// Drops the already initialized elements of the array if an error or panic occurs
+/// partway through the initialization process.
+///
+/// # Invariants
+///
+/// If `ptr` is not null:
+/// - `ptr[..num_init]` contains initialized elements of type `T`
+/// - `ptr[num_init..N]` (where N is the size of the array) contains uninitialized memory
+struct ArrayInit<T, F> {
+    /// A pointer to the first element of the array.
+    ptr: *mut T,
+    /// The number of initialized elements in the array.
+    num_init: usize,
+    /// Initialization function factory.
+    make_init: F,
+}
+
+impl<T, F> ArrayInit<T, F> {
+    #[inline]
+    fn new(make_init: F) -> Self {
+        Self {
+            // INVARIANT: `ptr` is null prior to any initialization.
+            ptr: core::ptr::null_mut(),
+            num_init: 0,
+            make_init,
+        }
+    }
+}
+
+/// SAFETY: On success, all `N` elements of the array have been initialized through
+/// `I: Init`. On error or panic, the elements that have been initialized so far are
+/// dropped, thus leaving the array uninitialized and ready to deallocate. The `Init`
+/// implementation executes the same code as that of `PinInit`.
+unsafe impl<T, F, I, E, const N: usize> Init<[T; N], E> for ArrayInit<T, F>
+where
+    F: FnMut(usize) -> I,
+    I: Init<T, E>,
+{
+    unsafe fn __init(mut self, slot: *mut [T; N]) -> Result<(), E> {
+        debug_assert!(!slot.is_null());
+        // INVARIANT: `self.ptr` is non-null once initialization starts.
+        self.ptr = slot.cast::<T>();
+        for i in 0..N {
+            // INVARIANT: Elements `self.ptr[..self.num_init]` have been initialized
+            // thus far. This hold true for every `self.num_init = i`.
+            self.num_init = i;
+            let init = (self.make_init)(i);
+            // SAFETY: `self.ptr.add(i)` is in bounds.
+            let ptr = unsafe { self.ptr.add(i) };
+            // SAFETY: The pointer is derived from `slot` with a valid offset. It is
+            // thus valid for writes and points uninitialized memory.
+            unsafe { init.__init(ptr) }?;
+        }
+        // INVARIANT: `self.ptr` is null after the array is initialized.
+        self.ptr = core::ptr::null_mut();
+        Ok(())
+    }
+}
+
+/// SAFETY: On success, all `N` elements of the array have been initialized through
+/// `I`. Since `I: PinInit` guarantees that the pinning invariants of `T` are upheld,
+/// the guarantees of `[T; N]` are also upheld. On error or panic, the elements that
+/// have been initialized so far are dropped, thus leaving the array uninitialized
+/// and ready to deallocate.
+unsafe impl<T, F, I, E, const N: usize> PinInit<[T; N], E> for ArrayInit<T, F>
+where
+    F: FnMut(usize) -> I,
+    I: PinInit<T, E>,
+{
+    unsafe fn __pinned_init(mut self, slot: *mut [T; N]) -> Result<(), E> {
+        debug_assert!(!slot.is_null());
+        // INVARIANT: `self.ptr` is non-null once initialization starts.
+        self.ptr = slot.cast::<T>();
+        for i in 0..N {
+            // INVARIANT: Elements `self.ptr[..self.num_init]` have been initialized
+            // thus far. This hold true for every `self.num_init = i`.
+            self.num_init = i;
+            let init = (self.make_init)(i);
+            // SAFETY: `self.ptr.add(i)` is in bounds.
+            let ptr = unsafe { self.ptr.add(i) };
+            // SAFETY: The pointer is derived from `slot` with a valid offset. It is
+            // thus valid for writes and points uninitialized memory.
+            unsafe { init.__pinned_init(ptr) }?;
+        }
+        // INVARIANT: `self.ptr` is null after the array is initialized.
+        self.ptr = core::ptr::null_mut();
+        Ok(())
+    }
+}
+
+impl<T, F> Drop for ArrayInit<T, F> {
+    fn drop(&mut self) {
+        if self.ptr.is_null() {
+            // Since `self.ptr` is null - either no initialization has been attempted
+            // or the array was successfully initialized, per type invariant. Nothing
+            // to drop.
+            return;
+        }
+
+        // SAFETY: Since `self.ptr` is not null - the initialization has failed
+        // partway. Drop `self.ptr[..self.num_init]` which are initialized per
+        // type invariant.
+        unsafe {
+            core::ptr::drop_in_place(core::ptr::slice_from_raw_parts_mut(self.ptr, self.num_init))
+        };
+    }
+}
+
 /// Initializes an array by initializing each element via the provided initializer.
 ///
 /// # Examples
@@ -1174,31 +1293,12 @@ pub fn uninit<T, E>() -> impl Init<MaybeUninit<T>, E> {
 /// assert_eq!(array.len(), 1_000);
 /// ```
 pub fn init_array_from_fn<I, const N: usize, T, E>(
-    mut make_init: impl FnMut(usize) -> I,
+    make_init: impl FnMut(usize) -> I,
 ) -> impl Init<[T; N], E>
 where
     I: Init<T, E>,
 {
-    let init = move |slot: *mut [T; N]| {
-        let slot = slot.cast::<T>();
-        for i in 0..N {
-            let init = make_init(i);
-            // SAFETY: Since 0 <= `i` < N, it is still in bounds of `[T; N]`.
-            let ptr = unsafe { slot.add(i) };
-            // SAFETY: The pointer is derived from `slot` and thus satisfies the `__init`
-            // requirements.
-            if let Err(e) = unsafe { init.__init(ptr) } {
-                // SAFETY: The loop has initialized the elements `slot[0..i]` and since we return
-                // `Err` below, `slot` will be considered uninitialized memory.
-                unsafe { ptr::drop_in_place(ptr::slice_from_raw_parts_mut(slot, i)) };
-                return Err(e);
-            }
-        }
-        Ok(())
-    };
-    // SAFETY: The initializer above initializes every element of the array. On failure it drops
-    // any initialized elements and returns `Err`.
-    unsafe { init_from_closure(init) }
+    ArrayInit::new(make_init)
 }
 
 /// Initializes an array by initializing each element via the provided initializer.
@@ -1217,31 +1317,12 @@ where
 /// assert_eq!(array.len(), 1_000);
 /// ```
 pub fn pin_init_array_from_fn<I, const N: usize, T, E>(
-    mut make_init: impl FnMut(usize) -> I,
+    make_init: impl FnMut(usize) -> I,
 ) -> impl PinInit<[T; N], E>
 where
     I: PinInit<T, E>,
 {
-    let init = move |slot: *mut [T; N]| {
-        let slot = slot.cast::<T>();
-        for i in 0..N {
-            let init = make_init(i);
-            // SAFETY: Since 0 <= `i` < N, it is still in bounds of `[T; N]`.
-            let ptr = unsafe { slot.add(i) };
-            // SAFETY: The pointer is derived from `slot` and thus satisfies the `__init`
-            // requirements.
-            if let Err(e) = unsafe { init.__pinned_init(ptr) } {
-                // SAFETY: The loop has initialized the elements `slot[0..i]` and since we return
-                // `Err` below, `slot` will be considered uninitialized memory.
-                unsafe { ptr::drop_in_place(ptr::slice_from_raw_parts_mut(slot, i)) };
-                return Err(e);
-            }
-        }
-        Ok(())
-    };
-    // SAFETY: The initializer above initializes every element of the array. On failure it drops
-    // any initialized elements and returns `Err`.
-    unsafe { pin_init_from_closure(init) }
+    ArrayInit::new(make_init)
 }
 
 /// Construct an initializer in a closure and run it.
