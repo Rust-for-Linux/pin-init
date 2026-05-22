@@ -20,6 +20,7 @@ pub(crate) struct Initializer {
     path: Path,
     delim_close_span: Span,
     fields: Punctuated<InitializerField, Token![,]>,
+    is_tuple_constructor: bool,
     rest: Option<(Token![..], Expr)>,
     error: Option<(Token![?], Type)>,
 }
@@ -90,6 +91,7 @@ pub(crate) fn expand(
         path,
         delim_close_span,
         fields,
+        is_tuple_constructor,
         rest,
         error,
     }: Initializer,
@@ -97,6 +99,10 @@ pub(crate) fn expand(
     pinned: bool,
     dcx: &mut DiagCtxt,
 ) -> Result<TokenStream, ErrorGuaranteed> {
+    if is_tuple_constructor {
+        check_tuple_constructor_cfgs(&fields, dcx)?;
+    }
+
     let error = error.map_or_else(
         || {
             if let Some(default_error) = attrs.iter().fold(None, |acc, attr| {
@@ -424,12 +430,6 @@ fn parse_paren_initializer(input: syn::parse::ParseStream<'_>) -> syn::Result<(S
 
     while !content.is_empty() {
         let attrs = content.call(Attribute::parse_outer)?;
-        if let Some(cfg) = attrs.iter().find(|attr| attr.path().is_ident("cfg")) {
-            return Err(syn::Error::new_spanned(
-                cfg,
-                "`#[cfg]` is not supported in tuple constructor syntax",
-            ));
-        }
         if content.peek(Token![<-]) {
             return Err(content.error(
                 "`<-` is not supported in tuple constructor syntax; use braces with indices, e.g. `Type { 0 <- init, 1: value }`",
@@ -455,16 +455,32 @@ fn parse_paren_initializer(input: syn::parse::ParseStream<'_>) -> syn::Result<(S
     Ok((paren_token.span.close(), fields))
 }
 
+fn check_tuple_constructor_cfgs(
+    fields: &Punctuated<InitializerField, Token![,]>,
+    dcx: &mut DiagCtxt,
+) -> Result<(), ErrorGuaranteed> {
+    for field in fields.iter().take(fields.len().saturating_sub(1)) {
+        if let Some(attr) = field.attrs.iter().find(|attr| attr.path().is_ident("cfg")) {
+            return Err(dcx.error(
+                attr,
+                "`#[cfg]` on tuple constructor arguments is only supported on the last argument",
+            ));
+        }
+    }
+    Ok(())
+}
+
 impl Parse for Initializer {
     fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
         let attrs = input.call(Attribute::parse_outer)?;
         let this = input.peek(Token![&]).then(|| input.parse()).transpose()?;
         let path = input.parse()?;
-        let (delim_close_span, fields, rest) = if input.peek(token::Brace) {
-            parse_brace_initializer(input)?
+        let (delim_close_span, fields, is_tuple_constructor, rest) = if input.peek(token::Brace) {
+            let (close_span, fields, rest) = parse_brace_initializer(input)?;
+            (close_span, fields, false, rest)
         } else if input.peek(token::Paren) {
             let (close_span, fields) = parse_paren_initializer(input)?;
-            (close_span, fields, None)
+            (close_span, fields, true, None)
         } else {
             return Err(input.error("expected curly braces or parentheses"));
         };
@@ -489,6 +505,7 @@ impl Parse for Initializer {
             path,
             delim_close_span,
             fields,
+            is_tuple_constructor,
             rest,
             error,
         })

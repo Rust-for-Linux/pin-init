@@ -1,4 +1,4 @@
-error: `#[cfg]` is not supported in tuple constructor syntax
+error: `#[cfg]` on tuple constructor arguments is only supported on the last argument
  --> tests/ui/compile-fail/init/tuple_constructor_cfg_non_last.rs:8:9
   |
 8 |         #[cfg(any())]

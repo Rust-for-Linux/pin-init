@@ -7,8 +7,8 @@ use syn::{
     parse_quote, parse_quote_spanned,
     spanned::Spanned,
     visit_mut::VisitMut,
-    Attribute, Field, Fields, Generics, Ident, Index, Item, Member, Meta, PathSegment, Type,
-    TypePath, Visibility, WhereClause,
+    Attribute, Field, Fields, Generics, Ident, Index, Item, Member, PathSegment, Type, TypePath,
+    Visibility, WhereClause,
 };
 
 use crate::diagnostics::{DiagCtxt, ErrorGuaranteed};
@@ -61,15 +61,6 @@ impl FieldInfo<'_> {
 
 fn has_cfg_attr(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("cfg"))
-}
-
-fn cfg_condition(attrs: &[Attribute]) -> Option<TokenStream> {
-    let cfgs: Vec<_> = attrs
-        .iter()
-        .filter(|attr| attr.path().is_ident("cfg"))
-        .filter_map(|attr| attr.parse_args::<Meta>().ok())
-        .collect();
-    (!cfgs.is_empty()).then(|| quote!(all(#(#cfgs),*)))
 }
 
 pub(crate) fn pin_data(
@@ -413,6 +404,10 @@ fn generate_projections(
         for field in fields {
             let Field { vis, ty, attrs, .. } = &field.field;
             let member = &field.member;
+            let cfgs: Vec<_> = attrs
+                .iter()
+                .filter(|attr| attr.path().is_ident("cfg"))
+                .collect();
 
             if field.pinned {
                 fields_decl.push(quote!(
@@ -420,6 +415,7 @@ fn generate_projections(
                     #vis ::core::pin::Pin<&'__pin mut #ty>,
                 ));
                 field_projections.push(quote!(
+                    #(#cfgs)*
                     // SAFETY: this field is structurally pinned.
                     unsafe { ::core::pin::Pin::new_unchecked(&mut #this.#member) },
                 ));
@@ -428,42 +424,12 @@ fn generate_projections(
                     #(#attrs)*
                     #vis &'__pin mut #ty,
                 ));
-                field_projections.push(quote!(&mut #this.#member,));
+                field_projections.push(quote!(
+                    #(#cfgs)*
+                    &mut #this.#member,
+                ));
             }
         }
-        let projection_init = if let Some(last_field) = fields.last() {
-            if let Some(cfg) = cfg_condition(&last_field.field.attrs) {
-                let field_projections_without_last =
-                    &field_projections[..field_projections.len() - 1];
-                quote! {{
-                    #[cfg(#cfg)]
-                    {
-                        #projection(
-                            #(#field_projections)*
-                            ::core::marker::PhantomData,
-                        )
-                    }
-                    #[cfg(not(#cfg))]
-                    {
-                        #projection(
-                            #(#field_projections_without_last)*
-                            ::core::marker::PhantomData,
-                        )
-                    }
-                }}
-            } else {
-                quote! {{
-                    #projection(
-                        #(#field_projections)*
-                        ::core::marker::PhantomData,
-                    )
-                }}
-            }
-        } else {
-            quote! {
-                #projection(::core::marker::PhantomData)
-            }
-        };
 
         (
             quote! {
@@ -475,7 +441,12 @@ fn generate_projections(
                     ::core::marker::PhantomData<&'__pin mut ()>,
                 ) #whr;
             },
-            projection_init,
+            quote! {{
+                #projection(
+                    #(#field_projections)*
+                    ::core::marker::PhantomData,
+                )
+            }},
         )
     };
 
