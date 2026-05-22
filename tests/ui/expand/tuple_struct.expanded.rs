@@ -136,4 +136,121 @@ const _: () = {
         const N: usize,
     > UselessPinnedDropImpl_you_need_to_specify_PinnedDrop for Foo<'a, T, N> {}
 };
-fn main() {}
+fn main() {
+    let mut first = [1u8, 2, 3];
+    let _ = {
+        let __data = unsafe {
+            use ::pin_init::__internal::HasInitData;
+            Foo::__init_data()
+        };
+        let init = __data
+            .__make_closure::<
+                _,
+                ::core::convert::Infallible,
+            >(move |slot| {
+                let mut ___0_guard = (unsafe {
+                    ::pin_init::__internal::Slot::<
+                        ::pin_init::__internal::Unpinned,
+                        _,
+                    >::new(&raw mut (*slot).0)
+                })
+                    .write(&mut first);
+                let mut ___1_guard = (unsafe {
+                    ::pin_init::__internal::Slot::<
+                        ::pin_init::__internal::Unpinned,
+                        _,
+                    >::new(&raw mut (*slot).1)
+                })
+                    .write(PhantomPinned);
+                let mut ___2_guard = (unsafe {
+                    ::pin_init::__internal::Slot::<
+                        ::pin_init::__internal::Unpinned,
+                        _,
+                    >::new(&raw mut (*slot).2)
+                })
+                    .init(10)?;
+                ::core::mem::forget(___0_guard);
+                ::core::mem::forget(___1_guard);
+                ::core::mem::forget(___2_guard);
+                #[allow(unreachable_code, clippy::diverging_sub_expression)]
+                let _ = || unsafe {
+                    let _ = &(*slot).0;
+                    let _ = &(*slot).1;
+                    let _ = &(*slot).2;
+                    ::core::ptr::write(
+                        slot,
+                        Foo {
+                            0: loop {},
+                            1: loop {},
+                            2: loop {},
+                        },
+                    )
+                };
+                Ok(unsafe { ::pin_init::__internal::InitOk::new() })
+            });
+        let init = move |
+            slot,
+        | -> ::core::result::Result<(), ::core::convert::Infallible> {
+            init(slot).map(|__InitOk| ())
+        };
+        unsafe { ::pin_init::init_from_closure::<_, ::core::convert::Infallible>(init) }
+    };
+    let mut second = [4u8, 5, 6];
+    let _ = {
+        let __data = unsafe {
+            use ::pin_init::__internal::HasInitData;
+            Foo::__init_data()
+        };
+        let init = __data
+            .__make_closure::<
+                _,
+                ::core::convert::Infallible,
+            >(move |slot| {
+                let mut ___0_guard = (unsafe {
+                    ::pin_init::__internal::Slot::<
+                        ::pin_init::__internal::Unpinned,
+                        _,
+                    >::new(&raw mut (*slot).0)
+                })
+                    .write(&mut second);
+                let mut ___1_guard = (unsafe {
+                    ::pin_init::__internal::Slot::<
+                        ::pin_init::__internal::Unpinned,
+                        _,
+                    >::new(&raw mut (*slot).1)
+                })
+                    .write(PhantomPinned);
+                let mut ___2_guard = (unsafe {
+                    ::pin_init::__internal::Slot::<
+                        ::pin_init::__internal::Unpinned,
+                        _,
+                    >::new(&raw mut (*slot).2)
+                })
+                    .write(20);
+                ::core::mem::forget(___0_guard);
+                ::core::mem::forget(___1_guard);
+                ::core::mem::forget(___2_guard);
+                #[allow(unreachable_code, clippy::diverging_sub_expression)]
+                let _ = || unsafe {
+                    let _ = &(*slot).0;
+                    let _ = &(*slot).1;
+                    let _ = &(*slot).2;
+                    ::core::ptr::write(
+                        slot,
+                        Foo {
+                            0: loop {},
+                            1: loop {},
+                            2: loop {},
+                        },
+                    )
+                };
+                Ok(unsafe { ::pin_init::__internal::InitOk::new() })
+            });
+        let init = move |
+            slot,
+        | -> ::core::result::Result<(), ::core::convert::Infallible> {
+            init(slot).map(|__InitOk| ())
+        };
+        unsafe { ::pin_init::init_from_closure::<_, ::core::convert::Infallible>(init) }
+    };
+}

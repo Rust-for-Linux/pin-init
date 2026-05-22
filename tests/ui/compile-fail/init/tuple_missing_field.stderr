@@ -1,0 +1,11 @@
+error[E0063]: missing field `1` in initializer of `Tuple`
+ --> tests/ui/compile-fail/init/tuple_missing_field.rs:7:23
+  |
+7 |     let _ = pin_init!(Tuple { 0: 1 });
+  |                       ^^^^^ missing `1`
+
+error[E0063]: missing field `1` in initializer of `Tuple`
+ --> tests/ui/compile-fail/init/tuple_missing_field.rs:8:19
+  |
+8 |     let _ = init!(Tuple { 0: 1 });
+  |                   ^^^^^ missing `1`

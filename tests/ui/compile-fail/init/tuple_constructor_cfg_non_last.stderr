@@ -1,0 +1,5 @@
+error: `#[cfg]` is not supported in tuple constructor syntax
+ --> tests/ui/compile-fail/init/tuple_constructor_cfg_non_last.rs:8:9
+  |
+8 |         #[cfg(any())]
+  |         ^^^^^^^^^^^^^

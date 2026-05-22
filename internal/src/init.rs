@@ -3,12 +3,13 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    braced,
+    braced, parenthesized,
     parse::{End, Parse},
     parse_quote,
     punctuated::Punctuated,
     spanned::Spanned,
-    token, Attribute, Block, Expr, ExprCall, ExprPath, Ident, Path, Token, Type,
+    token, Attribute, Block, Expr, ExprCall, ExprPath, Ident, Index, LitInt, Member, Path, Token,
+    Type,
 };
 
 use crate::diagnostics::{DiagCtxt, ErrorGuaranteed};
@@ -17,7 +18,7 @@ pub(crate) struct Initializer {
     attrs: Vec<InitializerAttribute>,
     this: Option<This>,
     path: Path,
-    brace_token: token::Brace,
+    delim_close_span: Span,
     fields: Punctuated<InitializerField, Token![,]>,
     rest: Option<(Token![..], Expr)>,
     error: Option<(Token![?], Type)>,
@@ -36,11 +37,11 @@ struct InitializerField {
 
 enum InitializerKind {
     Value {
-        ident: Ident,
+        member: Member,
         value: Option<(Token![:], Expr)>,
     },
     Init {
-        ident: Ident,
+        member: Member,
         _left_arrow_token: Token![<-],
         value: Expr,
     },
@@ -52,11 +53,25 @@ enum InitializerKind {
 }
 
 impl InitializerKind {
-    fn ident(&self) -> Option<&Ident> {
+    fn member(&self) -> Option<&Member> {
         match self {
-            Self::Value { ident, .. } | Self::Init { ident, .. } => Some(ident),
+            Self::Value { member, .. } | Self::Init { member, .. } => Some(member),
             Self::Code { .. } => None,
         }
+    }
+}
+
+fn member_ident(member: &Member) -> Ident {
+    match member {
+        Member::Named(ident) => ident.clone(),
+        Member::Unnamed(Index { index, .. }) => format_ident!("_{index}"),
+    }
+}
+
+fn member_binding(member: &Member) -> Option<Ident> {
+    match member {
+        Member::Named(ident) => Some(ident.clone()),
+        Member::Unnamed(_) => None,
     }
 }
 
@@ -73,7 +88,7 @@ pub(crate) fn expand(
         attrs,
         this,
         path,
-        brace_token,
+        delim_close_span,
         fields,
         rest,
         error,
@@ -96,7 +111,7 @@ pub(crate) fn expand(
             } else if let Some(default_error) = default_error {
                 syn::parse_str(default_error).unwrap()
             } else {
-                dcx.error(brace_token.span.close(), "expected `? <type>` after `}`");
+                dcx.error(delim_close_span, "expected `? <type>` after initializer");
                 parse_quote!(::core::convert::Infallible)
             }
         },
@@ -229,9 +244,9 @@ fn init_fields(
             cfgs
         };
 
-        let ident = match kind {
-            InitializerKind::Value { ident, .. } => ident,
-            InitializerKind::Init { ident, .. } => ident,
+        let member = match kind {
+            InitializerKind::Value { member, .. } => member,
+            InitializerKind::Init { member, .. } => member,
             InitializerKind::Code { block, .. } => {
                 res.extend(quote! {
                     #(#attrs)*
@@ -241,27 +256,28 @@ fn init_fields(
                 continue;
             }
         };
+        let ident = member_ident(member);
 
         let slot = if pinned {
             quote! {
                 // SAFETY:
                 // - `slot` is valid and properly aligned.
-                // - `make_field_check` checks that `&raw mut (*slot).#ident` is properly aligned.
-                // - `make_field_check` prevents `#ident` from being used twice, therefore
-                //   `(*slot).#ident` is exclusively accessed and has not been initialized.
+                // - `make_field_check` checks that the field is properly aligned.
+                // - `make_field_check` prevents the field from being used twice, therefore
+                //   it is exclusively accessed and has not been initialized.
                 (unsafe { #data.#ident(#slot) })
             }
         } else {
             quote! {
                 // For `init!()` macro, everything is unpinned.
                 // SAFETY:
-                // - `&raw mut (*slot).#ident` is valid.
-                // - `make_field_check` checks that `&raw mut (*slot).#ident` is properly aligned.
-                // - `make_field_check` prevents `#ident` from being used twice, therefore
-                //   `(*slot).#ident` is exclusively accessed and has not been initialized.
+                // - The field pointer is valid.
+                // - `make_field_check` checks that the field is properly aligned.
+                // - `make_field_check` prevents the field from being used twice, therefore
+                //   it is exclusively accessed and has not been initialized.
                 (unsafe {
                     ::pin_init::__internal::Slot::<::pin_init::__internal::Unpinned, _>::new(
-                        &raw mut (*#slot).#ident
+                        &raw mut (*#slot).#member
                     )
                 })
             }
@@ -271,7 +287,7 @@ fn init_fields(
         let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
 
         let init = match kind {
-            InitializerKind::Value { ident, value } => {
+            InitializerKind::Value { value, .. } => {
                 let value = value
                     .as_ref()
                     .map(|(_, value)| quote!(#value))
@@ -291,15 +307,20 @@ fn init_fields(
             }
             InitializerKind::Code { .. } => unreachable!(),
         };
+        let binding = member_binding(member).map(|ident| {
+            quote! {
+                #(#cfgs)*
+                // Allow `non_snake_case` since the same warning is going to be reported for the
+                // struct field.
+                #[allow(unused_variables, non_snake_case)]
+                let #ident = #guard.let_binding();
+            }
+        });
 
         res.extend(quote! {
             #init
 
-            #(#cfgs)*
-            // Allow `non_snake_case` since the same warning is going to be reported for the struct
-            // field.
-            #[allow(unused_variables, non_snake_case)]
-            let #ident = #guard.let_binding();
+            #binding
         });
 
         guards.push(guard);
@@ -324,9 +345,9 @@ fn make_field_check(
 ) -> TokenStream {
     let field_attrs: Vec<_> = fields
         .iter()
-        .filter_map(|f| f.kind.ident().map(|_| &f.attrs))
+        .filter_map(|f| f.kind.member().map(|_| &f.attrs))
         .collect();
-    let field_name: Vec<_> = fields.iter().filter_map(|f| f.kind.ident()).collect();
+    let field_name: Vec<_> = fields.iter().filter_map(|f| f.kind.member()).collect();
     let zeroing_trailer = match init_kind {
         InitKind::Normal => None,
         InitKind::Zeroing => Some(quote! {
@@ -362,36 +383,91 @@ fn make_field_check(
     }
 }
 
+type InitFields = Punctuated<InitializerField, Token![,]>;
+type InitRest = Option<(Token![..], Expr)>;
+
+fn parse_brace_initializer(
+    input: syn::parse::ParseStream<'_>,
+) -> syn::Result<(Span, InitFields, InitRest)> {
+    let content;
+    let brace_token = braced!(content in input);
+    let mut fields = Punctuated::new();
+    loop {
+        let lh = content.lookahead1();
+        if lh.peek(End) || lh.peek(Token![..]) {
+            break;
+        } else if lh.peek(Ident) || lh.peek(LitInt) || lh.peek(Token![_]) || lh.peek(Token![#]) {
+            fields.push_value(content.parse()?);
+            let lh = content.lookahead1();
+            if lh.peek(End) {
+                break;
+            } else if lh.peek(Token![,]) {
+                fields.push_punct(content.parse()?);
+            } else {
+                return Err(lh.error());
+            }
+        } else {
+            return Err(lh.error());
+        }
+    }
+    let rest = content
+        .peek(Token![..])
+        .then(|| Ok::<_, syn::Error>((content.parse()?, content.parse()?)))
+        .transpose()?;
+    Ok((brace_token.span.close(), fields, rest))
+}
+
+fn parse_paren_initializer(input: syn::parse::ParseStream<'_>) -> syn::Result<(Span, InitFields)> {
+    let content;
+    let paren_token = parenthesized!(content in input);
+    let mut fields = Punctuated::new();
+
+    while !content.is_empty() {
+        let attrs = content.call(Attribute::parse_outer)?;
+        if let Some(cfg) = attrs.iter().find(|attr| attr.path().is_ident("cfg")) {
+            return Err(syn::Error::new_spanned(
+                cfg,
+                "`#[cfg]` is not supported in tuple constructor syntax",
+            ));
+        }
+        if content.peek(Token![<-]) {
+            return Err(content.error(
+                "`<-` is not supported in tuple constructor syntax; use braces with indices, e.g. `Type { 0 <- init, 1: value }`",
+            ));
+        }
+        let value: Expr = content.parse()?;
+        let index = fields.len() as u32;
+        fields.push_value(InitializerField {
+            attrs,
+            kind: InitializerKind::Value {
+                member: Member::Unnamed(Index {
+                    index,
+                    span: value.span(),
+                }),
+                value: Some((Token![:](value.span()), value)),
+            },
+        });
+        if content.is_empty() {
+            break;
+        }
+        fields.push_punct(content.parse()?);
+    }
+    Ok((paren_token.span.close(), fields))
+}
+
 impl Parse for Initializer {
     fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
         let attrs = input.call(Attribute::parse_outer)?;
         let this = input.peek(Token![&]).then(|| input.parse()).transpose()?;
         let path = input.parse()?;
-        let content;
-        let brace_token = braced!(content in input);
-        let mut fields = Punctuated::new();
-        loop {
-            let lh = content.lookahead1();
-            if lh.peek(End) || lh.peek(Token![..]) {
-                break;
-            } else if lh.peek(Ident) || lh.peek(Token![_]) || lh.peek(Token![#]) {
-                fields.push_value(content.parse()?);
-                let lh = content.lookahead1();
-                if lh.peek(End) {
-                    break;
-                } else if lh.peek(Token![,]) {
-                    fields.push_punct(content.parse()?);
-                } else {
-                    return Err(lh.error());
-                }
-            } else {
-                return Err(lh.error());
-            }
-        }
-        let rest = content
-            .peek(Token![..])
-            .then(|| Ok::<_, syn::Error>((content.parse()?, content.parse()?)))
-            .transpose()?;
+        let (delim_close_span, fields, rest) = if input.peek(token::Brace) {
+            parse_brace_initializer(input)?
+        } else if input.peek(token::Paren) {
+            let (close_span, fields) = parse_paren_initializer(input)?;
+            (close_span, fields, None)
+        } else {
+            return Err(input.error("expected curly braces or parentheses"));
+        };
         let error = input
             .peek(Token![?])
             .then(|| Ok::<_, syn::Error>((input.parse()?, input.parse()?)))
@@ -411,7 +487,7 @@ impl Parse for Initializer {
             attrs,
             this,
             path,
-            brace_token,
+            delim_close_span,
             fields,
             rest,
             error,
@@ -454,22 +530,43 @@ impl Parse for InitializerKind {
                 _colon_token: input.parse()?,
                 block: input.parse()?,
             })
-        } else if lh.peek(Ident) {
-            let ident = input.parse()?;
+        } else if lh.peek(Ident) || lh.peek(LitInt) {
+            let member = if lh.peek(Ident) {
+                Member::Named(input.parse()?)
+            } else {
+                let lit: LitInt = input.parse()?;
+                let index: u32 = lit.base10_parse().map_err(|_| {
+                    syn::Error::new(
+                        lit.span(),
+                        "tuple field index must be a non-negative integer",
+                    )
+                })?;
+                Member::Unnamed(Index {
+                    index,
+                    span: lit.span(),
+                })
+            };
             let lh = input.lookahead1();
             if lh.peek(Token![<-]) {
                 Ok(Self::Init {
-                    ident,
+                    member,
                     _left_arrow_token: input.parse()?,
                     value: input.parse()?,
                 })
             } else if lh.peek(Token![:]) {
                 Ok(Self::Value {
-                    ident,
+                    member,
                     value: Some((input.parse()?, input.parse()?)),
                 })
             } else if lh.peek(Token![,]) || lh.peek(End) {
-                Ok(Self::Value { ident, value: None })
+                if matches!(member, Member::Unnamed(_)) {
+                    Err(lh.error())
+                } else {
+                    Ok(Self::Value {
+                        member,
+                        value: None,
+                    })
+                }
             } else {
                 Err(lh.error())
             }
