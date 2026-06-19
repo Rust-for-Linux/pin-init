@@ -18,7 +18,7 @@ jobs:
     name: Quality Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
@@ -59,7 +59,7 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
@@ -103,7 +103,7 @@ jobs:
   ui-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
@@ -131,7 +131,7 @@ jobs:
           - "--features default test --doc"
     name: "nightly/${{matrix.kind}}"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
@@ -166,7 +166,7 @@ jobs:
           - "--features default test --doc"
     name: "beta/${{matrix.kind}}"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
@@ -202,7 +202,7 @@ jobs:
           - "-Zmiri-strict-provenance"
           - "-Zmiri-tree-borrows -Zmiri-strict-provenance"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
@@ -232,7 +232,7 @@ jobs:
       matrix:
         targets: ["--doc", "--all-targets"]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
@@ -297,7 +297,7 @@ jobs:
   msrv:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
@@ -329,7 +329,7 @@ jobs:
   nightly-msrv:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
@@ -365,7 +365,7 @@ jobs:
     runs-on: ${{matrix.os}}
     name: "os-check (${{matrix.os}})"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
@@ -387,12 +387,12 @@ jobs:
   apply:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: Rust-for-Linux/linux
           path: "kernel"
           ref: pin-init-next
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           path: "pin-init"
           fetch-depth: 0
@@ -420,7 +420,7 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: nightly
