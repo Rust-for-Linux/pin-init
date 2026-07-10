@@ -33,7 +33,7 @@ jobs:
       - run: sudo apt-get install -y linkchecker
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-rdme
+          tool: cargo-rdme@1.5.1
       - run: git config user.name "github-runner" && git config user.email "<>"
 
       - name: Signed-off-by Tag Check
