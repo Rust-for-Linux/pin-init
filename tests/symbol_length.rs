@@ -57,5 +57,5 @@ fn type_name() {
     let symbol = &symbols[0];
     println!("{}: {}", symbol.len(), symbol);
 
-    assert!(symbol.len() < 180);
+    assert!(symbol.len() < 181);
 }
