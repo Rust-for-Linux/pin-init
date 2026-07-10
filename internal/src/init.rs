@@ -233,10 +233,12 @@ fn init_fields(
             InitializerKind::Value { ident, .. } => ident,
             InitializerKind::Init { ident, .. } => ident,
             InitializerKind::Code { block, .. } => {
+                let stmt = &block.stmts;
                 res.extend(quote! {
                     #(#attrs)*
-                    #[allow(unused_braces)]
-                    #block
+                    {
+                        #(#stmt)*
+                    }
                 });
                 continue;
             }
