@@ -44,7 +44,6 @@ const _: () = {
     }
     impl ::core::marker::Copy for __ThePinData {}
     #[allow(dead_code)]
-    #[expect(clippy::missing_safety_doc)]
     impl __ThePinData {
         /// Type inference helper function.
         #[inline(always)]
@@ -111,10 +110,8 @@ const _: () = {
         __Unpin<'__pin>: ::core::marker::Unpin,
     {}
     trait MustNotImplDrop {}
-    #[expect(drop_bounds)]
     impl<T: ::core::ops::Drop + ?::core::marker::Sized> MustNotImplDrop for T {}
     impl MustNotImplDrop for Foo {}
-    #[expect(non_camel_case_types)]
     trait UselessPinnedDropImpl_you_need_to_specify_PinnedDrop {}
     impl<
         T: ::pin_init::PinnedDrop + ?::core::marker::Sized,

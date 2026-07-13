@@ -44,7 +44,6 @@ const _: () = {
     }
     impl ::core::marker::Copy for __ThePinData {}
     #[allow(dead_code)]
-    #[expect(clippy::missing_safety_doc)]
     impl __ThePinData {
         /// Type inference helper function.
         #[inline(always)]
