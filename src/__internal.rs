@@ -5,7 +5,13 @@
 //! These items must not be used outside of this crate and the pin-init-internal crate located at
 //! `../internal`.
 
+use core::marker::PhantomPinned;
+
 use super::*;
+
+// Polyfill for the unstable `UnsafePinned` type.
+#[repr(transparent)]
+pub struct UnsafePinned<T: ?Sized>(PhantomPinned, UnsafeCell<T>);
 
 /// Zero-sized type used to mark a type as invariant.
 ///
@@ -117,9 +123,14 @@ impl<T: ?Sized> AllData<T> {
     #[inline(always)]
     pub fn __make_closure<F, E>(self, f: F) -> F
     where
-        F: FnOnce(*mut T) -> Result<InitOk, E>,
+        F: FnOnce(*mut T, Self) -> Result<InitOk, E>,
     {
         f
+    }
+
+    #[inline(always)]
+    pub fn __with_lt(self) -> Self {
+        self
     }
 }
 
@@ -359,6 +370,169 @@ impl<P, T: ?Sized> Drop for DropGuard<P, T> {
     }
 }
 
+pub struct Shared;
+pub struct Mutable;
+
+/// Represent an uninitialized field in a pinned struct that will be referenced by other fields.
+///
+/// # Invariants
+///
+/// - `ptr` is valid, properly aligned and points to uninitialized and exclusively accessed memory
+///   and will live longer than `'a`.
+/// - If `P` is `Pinned`, then `ptr` is structurally pinned.
+pub struct SelfRefSlot<'a, M, P, T: ?Sized> {
+    pub ptr: *mut T,
+    pub _phantom: PhantomData<(M, P, &'a mut T)>,
+}
+
+impl<'a, M, P, T: ?Sized> SelfRefSlot<'a, M, P, T> {
+    /// # Safety
+    ///
+    /// - `ptr` is valid, properly aligned and points to uninitialized and exclusively accessed
+    ///   memory and will live longer than `'a`.
+    /// - If `P` is `Pinned`, then `ptr` is structurally pinned.
+    #[inline]
+    pub unsafe fn new(ptr: *mut T) -> Self {
+        // INVARIANT: Per safety requirement.
+        Self {
+            ptr,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Initialize the field by value.
+    #[inline]
+    pub fn write(self, value: T) -> SelfRefDropGuard<'a, M, P, T>
+    where
+        T: Sized,
+    {
+        // SAFETY: `self.ptr` is a valid and aligned pointer for write.
+        unsafe { self.ptr.write(value) }
+        // SAFETY:
+        // - `self.ptr` is valid, properly aligned and live longer than `'a` per type invariant.
+        // - `*self.ptr` is initialized above and the ownership is transferred to the guard.
+        // - If `P` is `Pinned`, `self.ptr` is pinned.
+        unsafe { SelfRefDropGuard::new(self.ptr) }
+    }
+}
+
+impl<'a, M, T: ?Sized> SelfRefSlot<'a, M, Unpinned, T> {
+    /// Initialize the field.
+    #[inline]
+    pub fn init<E>(self, init: impl Init<T, E>) -> Result<SelfRefDropGuard<'a, M, Unpinned, T>, E> {
+        // SAFETY:
+        // - `self.ptr` is valid and properly aligned.
+        // - when `Err` is returned, we also propagate the error without touching `slot`;
+        //   also `self` is consumed so it cannot be touched further.
+        unsafe { init.__init(self.ptr)? };
+
+        // SAFETY:
+        // - `self.ptr` is valid, properly aligned and live longer than `'a` per type invariant.
+        // - `*self.ptr` is initialized above and the ownership is transferred to the guard.
+        Ok(unsafe { SelfRefDropGuard::new(self.ptr) })
+    }
+}
+
+impl<'a, M, T: ?Sized> SelfRefSlot<'a, M, Pinned, T> {
+    /// Initialize the field.
+    #[inline]
+    pub fn init<E>(
+        self,
+        init: impl PinInit<T, E>,
+    ) -> Result<SelfRefDropGuard<'a, M, Pinned, T>, E> {
+        // SAFETY:
+        // - `ptr` is valid
+        // - when `Err` is returned, we also propagate the error without touching `ptr`;
+        //   also `self` is consumed so it cannot be touched further.
+        // - the drop guard will not hand out `&mut` (but only `Pin<&mut T>`) it has been dropped.
+        unsafe { init.__pinned_init(self.ptr)? };
+
+        // SAFETY:
+        // - `self.ptr` is valid, properly aligned and live longer than `'a` per type invariant.
+        // - `*self.ptr` is initialized above and the ownership is transferred to the guard.
+        Ok(unsafe { SelfRefDropGuard::new(self.ptr) })
+    }
+}
+/// When a value of this type is dropped, it drops a `T`.
+///
+/// Can be forgotten to prevent the drop.
+///
+/// # Invariants
+///
+/// - `ptr` is valid, properly aligned and live longer than `'a`.
+/// - `*ptr` is initialized and owned by this guard.
+/// - if `P` is `Pinned`, `ptr` is pinned.
+pub struct SelfRefDropGuard<'a, M, P, T: ?Sized> {
+    ptr: *mut T,
+    phantom: PhantomData<(M, P, &'a mut T)>,
+}
+
+impl<'a, M, P, T: ?Sized> SelfRefDropGuard<'a, M, P, T> {
+    /// Creates a drop guard and transfer the ownership of the pointer content.
+    ///
+    /// The ownership is only relinquished if the guard is forgotten via [`core::mem::forget`].
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` is valid, properly aligned and live longer than `'a`.
+    /// - `*ptr` is initialized, and the ownership is transferred to this guard.
+    /// - if `P` is `Pinned`, `ptr` is pinned.
+    #[inline]
+    pub unsafe fn new(ptr: *mut T) -> Self {
+        // INVARIANT: By safety requirement.
+        Self {
+            ptr,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, T: ?Sized> SelfRefDropGuard<'a, Shared, Unpinned, T> {
+    /// Create a let binding for accessor use.
+    #[inline]
+    pub fn let_binding(&mut self) -> &'a T {
+        // SAFETY: Per type invariant.
+        unsafe { &*self.ptr }
+    }
+}
+
+impl<'a, T: ?Sized> SelfRefDropGuard<'a, Shared, Pinned, T> {
+    /// Create a let binding for accessor use.
+    #[inline]
+    pub fn let_binding(&mut self) -> Pin<&'a T> {
+        // SAFETY: `self.ptr` is valid, properly aligned, live longer than `'a`, initialized,
+        // exclusively accessible and pinned per type invariant.
+        unsafe { Pin::new_unchecked(&*self.ptr) }
+    }
+}
+
+impl<'a, T: ?Sized> SelfRefDropGuard<'a, Mutable, Unpinned, T> {
+    /// Create a let binding for accessor use.
+    #[inline]
+    pub fn let_binding(&mut self) -> &'a mut T {
+        // SAFETY: Per type invariant.
+        unsafe { &mut *self.ptr }
+    }
+}
+
+impl<'a, T: ?Sized> SelfRefDropGuard<'a, Mutable, Pinned, T> {
+    /// Create a let binding for accessor use.
+    #[inline]
+    pub fn let_binding(&mut self) -> Pin<&'a mut T> {
+        // SAFETY: `self.ptr` is valid, properly aligned, live longer than `'a`, initialized,
+        // exclusively accessible and pinned per type invariant.
+        unsafe { Pin::new_unchecked(&mut *self.ptr) }
+    }
+}
+
+impl<M, P, T: ?Sized> Drop for SelfRefDropGuard<'_, M, P, T> {
+    #[inline]
+    fn drop(&mut self) {
+        // SAFETY: `self.ptr` is valid, properly aligned and `*self.ptr` is owned by this guard.
+        unsafe { ptr::drop_in_place(self.ptr) }
+    }
+}
+
 /// Token used by `PinnedDrop` to prevent calling the function without creating this unsafely
 /// created struct. This is needed, because the `drop` function is safe, but should not be called
 /// manually.
@@ -400,5 +574,81 @@ impl<T: ?Sized> Default for AlwaysFail<T> {
 unsafe impl<T: ?Sized> PinInit<T, ()> for AlwaysFail<T> {
     unsafe fn __pinned_init(self, _slot: *mut T) -> Result<(), ()> {
         Err(())
+    }
+}
+
+/// Representation of types generic over 4 lifetimes.
+///
+/// This type limits the maximum amount of self-referential lifetimes supported, as we have checks
+/// that requires generalization over lifetime and it is unsound to substitute lifetime. 2 lifetimes
+/// can easily happen, 3 lifetimes should be much rarer, and 4 or more lifetimes would be
+/// exceedingly rare.
+pub trait ForLt4 {
+    /// The type parameterized by the lifetime.
+    type Of<'a, 'b, 'c, 'd>;
+}
+
+// This is a helper trait for implementation `ForLt4` to be able to use HRTB.
+pub trait WithLt4<'a, 'b, 'c, 'd> {
+    type Of;
+}
+
+pub struct ForLtImpl<T: ?Sized>(PhantomData<T>);
+
+impl<T: ?Sized + for<'a, 'b, 'c, 'd> WithLt4<'a, 'b, 'c, 'd>> ForLt4 for ForLtImpl<T> {
+    type Of<'a, 'b, 'c, 'd> = <T as WithLt4<'a, 'b, 'c, 'd>>::Of;
+}
+
+/// A wrapper for fields that reference other fields to block direct access.
+///
+/// Use the higher-ranked lifetime facility to support this. Note that it is important that this is
+/// *not* just a wrapper of `F::Of<'static>`, so we can implement `Send` and `Sync` only when things
+/// are true for all lifetimes.
+#[repr(transparent)]
+pub struct SelfRef<F: ForLt4>(
+    F::Of<'static, 'static, 'static, 'static>,
+    // Mark the type as `!Send` and `!Sync` so we can implement it manually. The auto trait
+    // implementation will cause `SelfRef<F>` to be `Send`/`Sync` when only `'static` is, causing a
+    // soundness hole similar to that of specialization.
+    PhantomData<*mut ()>,
+    // Mark the type as `!Unpin`. This is not actually needed for this type, but it is used to ensure
+    // tha the containing type is not `Unpin` by auto trait implementation.
+    //
+    // In a case of
+    // ```
+    // #[pin_data]
+    // struct Foo {
+    //     a: &'b u32,
+    //     b: u32,
+    // }
+    // ```
+    //
+    // This requires the type to be `!Unpin` despite all field types are `Unpin`. The `b` field is not going
+    // to transformed, so we rely on `SelfRef` to be the type that is `!Unpin`.
+    PhantomPinned,
+);
+
+// SAFETY: The bound ensures that `F::Of` is `Send` for all lifetime parameters.
+unsafe impl<F: ForLt4> Send for SelfRef<F> where for<'a, 'b, 'c, 'd> F::Of<'a, 'b, 'c, 'd>: Send {}
+// SAFETY: The bound ensures that `F::Of` is `Sync` for all lifetime parameters.
+unsafe impl<F: ForLt4> Sync for SelfRef<F> where for<'a, 'b, 'c, 'd> F::Of<'a, 'b, 'c, 'd>: Sync {}
+
+pub struct LifetimeGuard<'a> {
+    _phantom: PhantomInvariantLifetime<'a>,
+}
+
+impl<'a> LifetimeGuard<'a> {
+    #[inline(always)]
+    pub fn new<T>(_: &'a PhantomInvariant<&'a mut T>) -> Self {
+        LifetimeGuard {
+            _phantom: PhantomInvariantLifetime::new(),
+        }
+    }
+}
+
+impl<'a> Drop for LifetimeGuard<'a> {
+    #[inline(always)]
+    fn drop(&mut self) {
+        // Intentionally empty. See `generate_drop_check` in `pin_data.rs` for details.
     }
 }

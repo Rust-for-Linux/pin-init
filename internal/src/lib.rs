@@ -8,6 +8,7 @@
 
 // Documentation is done in the pin-init crate instead.
 #![allow(missing_docs)]
+#![cfg_attr(USE_RUSTC_FEATURES, feature(extract_if))]
 
 use proc_macro::TokenStream;
 use syn::parse_macro_input;
@@ -18,6 +19,7 @@ mod diagnostics;
 mod init;
 mod pin_data;
 mod pinned_drop;
+mod util;
 mod zeroable;
 
 #[proc_macro_attribute]

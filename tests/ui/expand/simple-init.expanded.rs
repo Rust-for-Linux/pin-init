@@ -10,7 +10,7 @@ fn main() {
             .__make_closure::<
                 _,
                 ::core::convert::Infallible,
-            >(move |slot| {
+            >(move |slot, __data| {
                 #[allow(unreachable_code)]
                 let _ = || unsafe { ::core::ptr::write(slot, Foo {}) };
                 Ok(unsafe { ::pin_init::__internal::InitOk::new() })
@@ -18,7 +18,7 @@ fn main() {
         let init = move |
             slot,
         | -> ::core::result::Result<(), ::core::convert::Infallible> {
-            init(slot).map(|__InitOk| ())
+            init(slot, __data.__with_lt()).map(|__InitOk| ())
         };
         unsafe { ::pin_init::init_from_closure::<_, ::core::convert::Infallible>(init) }
     };

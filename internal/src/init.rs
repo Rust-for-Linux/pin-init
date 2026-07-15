@@ -145,6 +145,7 @@ pub(crate) fn expand(
     let data = Ident::new("__data", Span::mixed_site());
     let init_fields = init_fields(&fields, pinned, &data, &slot);
     let field_check = make_field_check(&fields, init_kind, &path);
+
     Ok(quote! {{
         // Get the data about fields from the supplied type.
         // SAFETY: TODO
@@ -156,7 +157,7 @@ pub(crate) fn expand(
         };
         // Ensure that `#data` really is of type `#data` and help with type inference:
         let init = #data.__make_closure::<_, #error>(
-            move |slot| {
+            move |slot, #data| {
                 #zeroable_check
                 #this
                 #init_fields
@@ -166,7 +167,7 @@ pub(crate) fn expand(
             }
         );
         let init = move |slot| -> ::core::result::Result<(), #error> {
-            init(slot).map(|__InitOk| ())
+            init(slot, #data.__with_lt()).map(|__InitOk| ())
         };
         // SAFETY: TODO
         unsafe { ::pin_init::#init_from_closure::<_, #error>(init) }
