@@ -1539,10 +1539,13 @@ pub unsafe trait Zeroable {
     /// Whenever a type implements [`Zeroable`], this function should be preferred over
     /// [`core::mem::zeroed()`] or using `MaybeUninit<T>::zeroed().assume_init()`.
     ///
+    /// As const traits are not yet stable, [`pin_init::zeroed()`] can be used instead
+    /// when initialization is required in a `const` context.
+    ///
     /// # Examples
     ///
     /// ```
-    /// use pin_init::{Zeroable, zeroed};
+    /// use pin_init::Zeroable;
     ///
     /// #[derive(Zeroable)]
     /// struct Point {
@@ -1550,10 +1553,11 @@ pub unsafe trait Zeroable {
     ///     y: u32,
     /// }
     ///
-    /// let point: Point = zeroed();
+    /// let point: Point = Zeroable::zeroed();
     /// assert_eq!(point.x, 0);
     /// assert_eq!(point.y, 0);
     /// ```
+    #[inline]
     fn zeroed() -> Self
     where
         Self: Sized,
@@ -1582,6 +1586,9 @@ pub fn init_zeroed<T: Zeroable>() -> impl Init<T> {
 /// Whenever a type implements [`Zeroable`], this function should be preferred over
 /// [`core::mem::zeroed()`] or using `MaybeUninit<T>::zeroed().assume_init()`.
 ///
+/// While const traits remain unstable, this function serves as the `const` version of
+/// [`Zeroable::zeroed()`].
+///
 /// # Examples
 ///
 /// ```
@@ -1597,6 +1604,7 @@ pub fn init_zeroed<T: Zeroable>() -> impl Init<T> {
 /// assert_eq!(point.x, 0);
 /// assert_eq!(point.y, 0);
 /// ```
+#[inline]
 pub const fn zeroed<T: Zeroable>() -> T {
     // SAFETY:By the type invariants of `Zeroable`, all zeroes is a valid bit pattern for `T`.
     unsafe { core::mem::zeroed() }
