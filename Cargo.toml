@@ -15,6 +15,9 @@ repository = "https://github.com/Rust-for-Linux/pin-init"
 keywords = ["safe", "pin", "init", "no-std", "rust-patterns"]
 categories = ["no-std", "rust-patterns", "embedded"]
 
+[workspace]
+members = ["internal"]
+
 [dependencies]
 pin-init-internal = { path = "./internal", version = "=0.3.0" }
 
