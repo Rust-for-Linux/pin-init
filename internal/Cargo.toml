@@ -14,9 +14,9 @@ repository = "https://github.com/Rust-for-Linux/pin-init"
 proc-macro = true
 
 [dependencies]
-quote = "1.0"
-proc-macro2 = "1.0"
-syn = { version = "2.0.86", features = ["full", "parsing", "visit-mut"] }
+quote = "1.0.40"
+proc-macro2 = "1.0.101"
+syn = { version = "2.0.106", features = ["full", "parsing", "visit-mut"] }
 
 [build-dependencies]
 rustc_version = "0.4"
