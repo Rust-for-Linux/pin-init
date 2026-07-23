@@ -1,0 +1,5 @@
+error: `#[cfg]` on tuple struct fields is only supported on the last field
+ --> tests/ui/compile-fail/pin_data/tuple_struct_cfg_non_last.rs:4:14
+  |
+4 | struct Tuple(#[cfg(any())] HiddenField, i32);
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^

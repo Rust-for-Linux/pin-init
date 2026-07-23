@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-
+- Support tuple structs in `#[pin_data]`, including tuple struct projections, and tuple struct
+  initialization in `init!` and `pin_init!`.
 - `[pin_]init_scope` functions to run arbitrary code inside of an initializer.
 - `&'static mut MaybeUninit<T>` now implements `InPlaceWrite`. This enables users to use external
   allocation mechanisms such as `static_cell`.
