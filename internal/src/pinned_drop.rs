@@ -16,8 +16,8 @@ pub(crate) fn pinned_drop(
     }
     input.unsafety = Some(Token![unsafe](input.impl_token.span));
     match &mut input.trait_ {
-        Some((not, path, _for)) => {
-            if let Some(not) = not {
+        Some((path, _for)) => {
+            if let Some(not) = input.modifiers.polarity {
                 dcx.error(not, "cannot implement `!PinnedDrop`");
             }
             for (seg, expected) in path

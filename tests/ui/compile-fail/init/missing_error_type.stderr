@@ -1,4 +1,4 @@
-error: unexpected end of input, expected one of: `for`, parentheses, `fn`, `unsafe`, `extern`, identifier, `::`, `<`, `dyn`, square brackets, `*`, `&`, `!`, `impl`, `_`, lifetime
+error: unexpected end of input, expected one of: `for`, parentheses, `unsafe`, `fn`, `extern`, identifier, `::`, `<`, `dyn`, square brackets, `*`, `&`, `!`, `impl`, `_`, lifetime
  --> tests/ui/compile-fail/init/missing_error_type.rs:8:13
   |
 8 |     let _ = init!(Foo { x: Box::new(0)? }?);
