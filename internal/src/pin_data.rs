@@ -140,7 +140,11 @@ pub(crate) fn pin_data(
 
 fn is_phantom_pinned(ty: &Type) -> bool {
     match ty {
-        Type::Path(TypePath { qself: None, path }) => {
+        Type::Path(TypePath {
+            qself: None,
+            path,
+            attrs: _,
+        }) => {
             // Cannot possibly refer to `PhantomPinned` (except alias, but that's on the user).
             if path.segments.len() > 3 {
                 return false;
