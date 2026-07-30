@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
     braced,
     parse::{End, Parse},
@@ -13,6 +13,7 @@ use syn::{
 
 use crate::diagnostics::{DiagCtxt, ErrorGuaranteed};
 
+#[derive(Clone)]
 pub(crate) struct Initializer {
     attrs: Vec<InitializerAttribute>,
     this: Option<This>,
@@ -23,17 +24,20 @@ pub(crate) struct Initializer {
     error: Option<(Token![?], Type)>,
 }
 
+#[derive(Clone)]
 struct This {
     _and_token: Token![&],
     ident: Ident,
     _in_token: Token![in],
 }
 
+#[derive(Clone)]
 struct InitializerField {
     attrs: Vec<Attribute>,
     kind: InitializerKind,
 }
 
+#[derive(Clone)]
 enum InitializerKind {
     Value {
         ident: Ident,
@@ -60,12 +64,71 @@ impl InitializerKind {
     }
 }
 
+#[derive(Clone)]
 enum InitializerAttribute {
     DefaultError(DefaultErrorAttribute),
 }
 
+#[derive(Clone)]
 struct DefaultErrorAttribute {
     ty: Box<Type>,
+}
+
+pub(crate) fn expand_with_cfg(
+    mut initializer: Initializer,
+    default_error: Option<&'static str>,
+    pinned: bool,
+    dcx: &mut DiagCtxt,
+) -> Result<TokenStream, ErrorGuaranteed> {
+    // Handling cfg can get complicated especially when tuple structs are involved.
+    // Therefore, resolve all field cfgs first before continuing.
+    for (field_idx, field) in initializer.fields.iter_mut().enumerate() {
+        let cfg: Vec<_> = field
+            .attrs
+            .iter()
+            .filter(|a| a.path().is_ident("cfg"))
+            .map(|a| {
+                a.parse_args::<TokenStream>()
+                    .expect("parse as token stream cannot fail")
+            })
+            .collect();
+
+        if cfg.is_empty() {
+            continue;
+        }
+
+        field.attrs.retain(|a| !a.path().is_ident("cfg"));
+        let true_initializer = &initializer;
+
+        let mut false_initializer = initializer.clone();
+        false_initializer.fields = false_initializer
+            .fields
+            .into_pairs()
+            .enumerate()
+            .filter(|&(i, _)| i != field_idx)
+            .map(|(_, p)| p)
+            .collect();
+
+        let macro_name = if pinned {
+            quote!(::pin_init::pin_init)
+        } else {
+            quote!(::pin_init::init)
+        };
+
+        return Ok(quote! {
+            {
+                // Use `{}` delimiter here so semicolon is not required (which becomes unit type).
+                #[cfg(all(#(#cfg,)*))]
+                #macro_name! { #true_initializer }
+
+                #[cfg(not(all(#(#cfg,)*)))]
+                #macro_name! { #false_initializer }
+            }
+        });
+    }
+
+    // No cfgs are left.
+    expand(initializer, default_error, pinned, dcx)
 }
 
 pub(crate) fn expand(
@@ -220,14 +283,12 @@ fn init_fields(
     slot: &Ident,
 ) -> TokenStream {
     let mut guards = vec![];
-    let mut guard_attrs = vec![];
     let mut res = TokenStream::new();
     for InitializerField { attrs, kind } in fields {
-        let cfgs = {
-            let mut cfgs = attrs.clone();
-            cfgs.retain(|attr| attr.path().is_ident("cfg"));
-            cfgs
-        };
+        assert!(
+            !attrs.iter().any(|a| a.path().is_ident("cfg")),
+            "cfgs should be all resolved at this point"
+        );
 
         let ident = match kind {
             InitializerKind::Value { ident, .. } => ident,
@@ -297,7 +358,6 @@ fn init_fields(
         res.extend(quote! {
             #init
 
-            #(#cfgs)*
             // Allow `non_snake_case` since the same warning is going to be reported for the struct
             // field.
             #[allow(unused_variables, non_snake_case)]
@@ -305,14 +365,12 @@ fn init_fields(
         });
 
         guards.push(guard);
-        guard_attrs.push(cfgs);
     }
     quote! {
         #res
         // If execution reaches this point, all fields have been initialized. Therefore we can now
         // dismiss the guards by forgetting them.
         #(
-            #(#guard_attrs)*
             ::core::mem::forget(#guards);
         )*
     }
@@ -477,6 +535,88 @@ impl Parse for InitializerKind {
             }
         } else {
             Err(lh.error())
+        }
+    }
+}
+
+impl ToTokens for Initializer {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        for attr in &self.attrs {
+            attr.to_tokens(tokens);
+        }
+        if let Some(this) = &self.this {
+            this.to_tokens(tokens);
+        }
+        self.path.to_tokens(tokens);
+        self.brace_token.surround(tokens, |tokens| {
+            self.fields.to_tokens(tokens);
+            if let Some((dotdot, expr)) = &self.rest {
+                dotdot.to_tokens(tokens);
+                expr.to_tokens(tokens);
+            }
+        });
+        if let Some((question, ty)) = &self.error {
+            question.to_tokens(tokens);
+            ty.to_tokens(tokens);
+        }
+    }
+}
+
+impl ToTokens for InitializerAttribute {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Self::DefaultError(DefaultErrorAttribute { ty }) => {
+                quote!(#[default_error(#ty)]).to_tokens(tokens);
+            }
+        }
+    }
+}
+
+impl ToTokens for This {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self._and_token.to_tokens(tokens);
+        self.ident.to_tokens(tokens);
+        self._in_token.to_tokens(tokens);
+    }
+}
+
+impl ToTokens for InitializerField {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        for attr in &self.attrs {
+            attr.to_tokens(tokens);
+        }
+        self.kind.to_tokens(tokens);
+    }
+}
+
+impl ToTokens for InitializerKind {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Self::Value { ident, value } => {
+                ident.to_tokens(tokens);
+                if let Some((colon, expr)) = value {
+                    colon.to_tokens(tokens);
+                    expr.to_tokens(tokens);
+                }
+            }
+            Self::Init {
+                ident,
+                _left_arrow_token,
+                value,
+            } => {
+                ident.to_tokens(tokens);
+                _left_arrow_token.to_tokens(tokens);
+                value.to_tokens(tokens);
+            }
+            Self::Code {
+                _underscore_token,
+                _colon_token,
+                block,
+            } => {
+                _underscore_token.to_tokens(tokens);
+                _colon_token.to_tokens(tokens);
+                block.to_tokens(tokens);
+            }
         }
     }
 }
