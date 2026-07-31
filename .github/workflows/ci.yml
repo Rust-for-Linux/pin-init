@@ -31,7 +31,7 @@ jobs:
           toolchain: nightly
           components: rustfmt
       - run: sudo apt-get install -y linkchecker
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.3
         with:
           tool: cargo-rdme@1.5.1
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -67,7 +67,7 @@ jobs:
         with:
           toolchain: nightly
           components: clippy
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.3
         with:
           tool: cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -111,7 +111,7 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.3
         with:
           tool: cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -139,7 +139,7 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.3
         with:
           tool: cargo-expand,cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -174,7 +174,7 @@ jobs:
         with:
           toolchain: beta
           components: rust-src
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.3
         with:
           tool: cargo-expand,cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -213,7 +213,7 @@ jobs:
         with:
           toolchain: ${{env.NIGHTLY}}
           components: miri, rust-src
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.3
         with:
           tool: cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -304,7 +304,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.3
         with:
           tool: cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -337,7 +337,7 @@ jobs:
         with:
           toolchain: stable
           components: rust-src
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.3
         with:
           tool: cargo-expand,cargo-hack
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -373,7 +373,7 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.3
         with:
           tool: cargo-expand
       - run: git config user.name "github-runner" && git config user.email "<>"
@@ -425,7 +425,7 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.3
         with:
           tool: cargo-expand
       - run: cargo update
