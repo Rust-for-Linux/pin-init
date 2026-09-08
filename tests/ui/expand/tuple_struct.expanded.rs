@@ -20,6 +20,14 @@ const _: () = {
         &'__this mut usize,
         ::core::marker::PhantomData<&'__this mut Foo<'a, T, N>>,
     );
+    #[allow(dead_code, non_snake_case)]
+    #[doc(hidden)]
+    struct __ProjectionRef<'__this, 'a, T: Copy, const N: usize>(
+        &'__this &'a mut [T; N],
+        ::core::pin::Pin<&'__this PhantomPinned>,
+        &'__this usize,
+        ::core::marker::PhantomData<&'__this Foo<'a, T, N>>,
+    );
     impl<'a, T: Copy, const N: usize> Foo<'a, T, N> {
         /// Pin-projects all fields of `Self`.
         ///
@@ -60,6 +68,29 @@ const _: () = {
                     &mut this.0,
                     unsafe { ::core::pin::Pin::new_unchecked(&mut this.1) },
                     &mut this.2,
+                    ::core::marker::PhantomData,
+                ),
+            )
+        }
+        /// Pin-projects all fields of `Self` from a shared reference with proper lifetime.
+        ///
+        /// These fields are structurally pinned:
+        /// - index `1`
+        ///
+        /// These fields are **not** structurally pinned:
+        /// - index `0`
+        /// - index `2`
+        #[inline]
+        fn with_project_ref<'__this, R>(
+            self: ::core::pin::Pin<&'__this Self>,
+            f: impl ::core::ops::FnOnce(__ProjectionRef<'__this, 'a, T, N>) -> R,
+        ) -> R {
+            let this = ::core::pin::Pin::get_ref(self);
+            f(
+                __ProjectionRef(
+                    &this.0,
+                    unsafe { ::core::pin::Pin::new_unchecked(&this.1) },
+                    &this.2,
                     ::core::marker::PhantomData,
                 ),
             )
