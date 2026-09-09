@@ -29,7 +29,7 @@ const _: () = {
         array: &'__this mut [u8; 1024 * 1024],
         r: &'__this mut &'b mut [&'a mut T; SIZE],
         _pin: ::core::pin::Pin<&'__this mut PhantomPinned>,
-        ___pin_phantom_data: ::core::marker::PhantomData<&'__this mut ()>,
+        ___pin_phantom_data: ::core::marker::PhantomData<&'__this Foo<'a, 'b, T, SIZE>>,
     }
     /// Pin-projections of [`Foo`]
     #[allow(dead_code, non_snake_case)]

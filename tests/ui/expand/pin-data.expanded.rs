@@ -11,7 +11,7 @@ const _: () = {
     struct __Projection<'__this> {
         array: &'__this mut [u8; 1024 * 1024],
         _pin: ::core::pin::Pin<&'__this mut PhantomPinned>,
-        ___pin_phantom_data: ::core::marker::PhantomData<&'__this mut ()>,
+        ___pin_phantom_data: ::core::marker::PhantomData<&'__this Foo>,
     }
     /// Pin-projections of [`Foo`]
     #[allow(dead_code, non_snake_case)]

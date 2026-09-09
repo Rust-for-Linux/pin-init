@@ -11,8 +11,9 @@ use syn::{
     spanned::Spanned,
     visit::Visit,
     visit_mut::VisitMut,
-    Attribute, Field, Fields, GenericParam, Generics, Ident, Index, Item, ItemStruct, Lifetime,
-    LifetimeParam, Member, Meta, PathSegment, Token, Type, TypePath, WhereClause,
+    Attribute, Field, Fields, GenericArgument, GenericParam, Generics, Ident, Index, Item,
+    ItemStruct, Lifetime, LifetimeParam, Member, Meta, PathArguments, PathSegment, Token, Type,
+    TypeParamBound, TypePath, WhereClause, WherePredicate,
 };
 
 use crate::{
@@ -178,6 +179,7 @@ impl Capture {
         dcx: &mut DiagCtxt,
         attrs: &mut Vec<Attribute>,
         bound_lifetimes: &BTreeSet<&Lifetime>,
+        exist_lifetimes: &BTreeSet<&Lifetime>,
         field_idx_map: &BTreeMap<Ident, usize>,
     ) -> Option<(BTreeSet<Capture>, Variance)> {
         let attr = attrs.extract_single_attr(dcx, "borrows")?;
@@ -203,7 +205,10 @@ impl Capture {
                 continue;
             }
 
-            if lt.ident != "_" && !field_idx_map.contains_key(&lt.ident) {
+            if lt.ident != "_"
+                && !exist_lifetimes.contains(lt)
+                && !field_idx_map.contains_key(&lt.ident)
+            {
                 dcx.error(lt, format!("`{lt}` is not a field name"));
                 continue;
             }
@@ -237,6 +242,8 @@ struct StructInfo {
     /// Field lifetime genercis with outlive chain, with one chain for covariant fields and one
     /// chain for invariant fields.
     field_lt_split_variance_outlive_chain: Generics,
+    /// Existential lifetime with their outlives bounds.
+    exist_lt: Generics,
 }
 
 pub(crate) fn expand_with_cfg(
@@ -326,6 +333,15 @@ fn expand(
 
     let is_tuple_struct = matches!(struct_.fields, Fields::Unnamed(_));
 
+    let exist_lifetimes;
+    if let Some(whr) = &mut struct_.generics.where_clause {
+        exist_lifetimes = parse_existential_lifetimes(dcx, whr);
+    } else {
+        exist_lifetimes = Vec::new();
+    }
+    let all_exist_lifetimes: BTreeSet<&Lifetime> =
+        exist_lifetimes.iter().map(|f| &f.lifetime).collect();
+
     // Collect all bound lifetimes from generics.
     let bound_lifetimes: BTreeSet<&Lifetime> =
         struct_.generics.lifetimes().map(|x| &x.lifetime).collect();
@@ -360,9 +376,14 @@ fn expand(
             };
 
             // Parse `#[borrows]` attribute.
-            let (mut captures, wildcard_variance) =
-                Capture::parse_list(dcx, &mut field.attrs, &bound_lifetimes, &field_idx_map)
-                    .unwrap_or_default();
+            let (mut captures, wildcard_variance) = Capture::parse_list(
+                dcx,
+                &mut field.attrs,
+                &bound_lifetimes,
+                &all_exist_lifetimes,
+                &field_idx_map,
+            )
+            .unwrap_or_default();
 
             // Infer lifetime based on the field referenced.
             // Bound lifetimes from struct generics take priority.
@@ -377,11 +398,13 @@ fn expand(
             // would not be inferred as self-referential because `'a` is already bound by the
             // struct generics.
             Lifetime::visitor(|lt| {
-                if bound_lifetimes.contains(lt) || captures.contains(lt) {
+                if bound_lifetimes.contains(lt)
+                    || captures.contains(lt)
+                {
                     return;
                 }
 
-                if !field_idx_map.contains_key(&lt.ident) {
+                if !all_exist_lifetimes.contains(lt) && !field_idx_map.contains_key(&lt.ident) {
                     dcx.error(
                         lt,
                         format!("`{lt}` is neither a lifetime in generics nor a field name"),
@@ -396,8 +419,10 @@ fn expand(
             })
             .visit_type(&field.ty);
 
-            for capture in captures.iter() {
-                implicitly_borrowed.insert(capture.lifetime.ident.clone());
+            for capture in captures.iter(){
+                if !all_exist_lifetimes.contains(&capture.lifetime){
+                    implicitly_borrowed.insert(capture.lifetime.ident.clone());
+                }
             }
 
             let borrowed = BorrowedKind::parse(dcx, &mut field.attrs).and_then(|kind| {
@@ -531,6 +556,27 @@ fn expand(
         where_clause: None,
     };
 
+    let exist_lt_generics = Generics {
+        lt_token: Some(Default::default()),
+        params: exist_lifetimes
+            .iter()
+            .map(|l| {
+                GenericParam::Lifetime(LifetimeParam {
+                    attrs: Vec::new(),
+                    lifetime: l.lifetime.clone(),
+                    colon_token: Default::default(),
+                    bounds: l.bounds.iter().cloned().collect(),
+                })
+            })
+            .collect(),
+        gt_token: Some(Default::default()),
+        where_clause: None,
+    };
+    let mut field_exist_lt_generics = field_lifetime_outlive_chain.clone();
+    field_exist_lt_generics
+        .params
+        .extend(exist_lt_generics.params.clone());
+
     let mut field_lt_split_variance_outlive_chain = Generics {
         lt_token: Some(Default::default()),
         params: borrowed_covariant_fields
@@ -616,6 +662,7 @@ fn expand(
         is_tuple_struct,
         field_lt_outlive_chain: field_lifetime_outlive_chain,
         field_lt_split_variance_outlive_chain,
+        exist_lt: exist_lt_generics,
     };
 
     for field in &info.fields {
@@ -631,13 +678,17 @@ fn expand(
         }
     }
 
-    let struct_def = generate_struct_def(&info);
+    let struct_def = generate_struct_def(&info, &exist_lifetimes);
     let unpin_impl = generate_unpin_impl(&info);
     let drop_impl = generate_drop_impl(&info);
     let drop_order_check = generate_drop_order_check(dcx, &info);
     let variance_check = generate_variance_check(&info);
-    let projections = generate_projections(&info);
-    let the_pin_data = generate_the_pin_data(&info);
+    let projections = generate_projections(&info, &exist_lifetimes);
+    let the_pin_data = generate_the_pin_data(
+        &info,
+        &info.field_lt_outlive_chain,
+        &field_exist_lt_generics,
+    );
 
     Ok(quote! {
         #struct_def
@@ -678,7 +729,84 @@ fn is_phantom_pinned(ty: &Type) -> bool {
     }
 }
 
-fn generate_struct_def(info: &StructInfo) -> TokenStream {
+struct ExistLt {
+    lifetime: Lifetime,
+    bounds: Vec<Lifetime>,
+}
+
+fn parse_existential_lifetimes(dcx: &mut DiagCtxt, whr: &mut WhereClause) -> Vec<ExistLt> {
+    fn parse_one(dcx: &mut DiagCtxt, pred: &WherePredicate, result: &mut Vec<ExistLt>) -> bool {
+        let WherePredicate::Type(pred) = &pred else {
+            return false;
+        };
+        let Type::Path(path) = &pred.bounded_ty else {
+            return false;
+        };
+
+        if path.qself.is_some()
+            || path.path.leading_colon.is_some()
+            || path.path.segments.len() != 1
+        {
+            return false;
+        }
+        let path_seg = &path.path.segments[0];
+
+        if path_seg.ident != "exists" {
+            return false;
+        };
+
+        let PathArguments::AngleBracketed(p) = &path_seg.arguments else {
+            dcx.error(
+                path_seg,
+                "existential clauses require a lifetime, e.g. `exists<'a>`",
+            );
+            return true;
+        };
+
+        let mut lifetimes = Vec::new();
+        for arg in p.args.iter() {
+            let GenericArgument::Lifetime(lt) = arg else {
+                dcx.error(arg, "only lifetime can appear in existential clauses");
+                return true;
+            };
+
+            lifetimes.push(lt.clone());
+        }
+
+        let mut bounds = Vec::new();
+        for bound in pred.bounds.iter() {
+            let TypeParamBound::Lifetime(lt) = bound else {
+                dcx.error(bound, "only lifetime can appear in existential clauses");
+                return true;
+            };
+            bounds.push(lt.clone());
+        }
+        if bounds.is_empty() {
+            dcx.error(
+                pred.colon_token,
+                "existential clauses require at least one outlive bounds",
+            );
+            return true;
+        }
+
+        result.extend(lifetimes.into_iter().map(|lifetime| ExistLt {
+            lifetime,
+            bounds: bounds.clone(),
+        }));
+
+        true
+    }
+
+    let mut result = Vec::new();
+    whr.predicates = std::mem::take(&mut whr.predicates)
+        .into_pairs()
+        .filter(|p| !parse_one(dcx, p.value(), &mut result))
+        .collect();
+
+    result
+}
+
+fn generate_struct_def(info: &StructInfo, exist_lt: &[ExistLt]) -> TokenStream {
     let ItemStruct {
         attrs,
         vis,
@@ -688,6 +816,14 @@ fn generate_struct_def(info: &StructInfo) -> TokenStream {
         fields: _,
         semi_token,
     } = &info.struct_;
+
+    let mut phantom = None;
+    if !exist_lt.is_empty() {
+        let mut exist_lt_phantom: Vec<_> = exist_lt.iter().flat_map(|l| l.bounds.iter()).collect();
+        exist_lt_phantom.sort_unstable();
+        exist_lt_phantom.dedup();
+        phantom = Some(quote!((#(::pin_init::__internal::ExistLt<#exist_lt_phantom>),*)));
+    }
 
     let generated_fields = info.fields.iter().map(|field| {
         let Field {
@@ -721,6 +857,10 @@ fn generate_struct_def(info: &StructInfo) -> TokenStream {
             }
 
             ty = quote!(::pin_init::__internal::Erase<#ty>);
+
+            if let Some(phantom) = phantom.take() {
+                ty = quote!(::pin_init::__internal::WithPhantom<#ty, #phantom>);
+            }
         };
 
         if let Some(borrowed) = &field.borrowed {
@@ -925,8 +1065,11 @@ fn generate_drop_order_check(dcx: &mut DiagCtxt, info: &StructInfo) -> TokenStre
     // with known lifetime bounds as bounds on the function, and asks Rust to *prove* that the types
     // are wellformed, given the bounds.
 
-    let generics_with_field_lt =
-        CombinedGenerics(vec![&info.field_lt_split_variance_outlive_chain, generics]);
+    let generics_with_field_lt = CombinedGenerics(vec![
+        &info.exist_lt,
+        &info.field_lt_split_variance_outlive_chain,
+        generics,
+    ]);
 
     let (_, ty_generics, _) = generics.split_for_impl();
     let (impl_generics_with_field_lt, _, _) = generics_with_field_lt.split_for_impl();
@@ -1100,7 +1243,7 @@ fn generate_variance_check(info: &StructInfo) -> TokenStream {
     )
 }
 
-fn generate_projections(info: &StructInfo) -> TokenStream {
+fn generate_projections(info: &StructInfo, exist_lt: &[ExistLt]) -> TokenStream {
     let ItemStruct {
         vis,
         ident,
@@ -1113,6 +1256,7 @@ fn generate_projections(info: &StructInfo) -> TokenStream {
     let generics_with_this_lt = CombinedGenerics(vec![&this_lt_generics, generics]);
     let generics_with_this_field_lt = CombinedGenerics(vec![
         &this_lt_generics,
+        &info.exist_lt,
         &info.field_lt_outlive_chain,
         generics,
     ]);
@@ -1122,13 +1266,28 @@ fn generate_projections(info: &StructInfo) -> TokenStream {
         generics,
     ]);
     let (impl_generics, ty_generics, whr) = generics.split_for_impl();
-    let field_lt_for_generics = info.field_lt_outlive_chain.for_generics();
+
+    let mut g = info.field_lt_outlive_chain.clone();
+    g.params.extend(info.exist_lt.params.clone());
+    let field_lt_for_generics = g.for_generics();
     let (_, ty_generics_with_this_lt, _) = generics_with_this_lt.split_for_impl();
     let (_, ty_generics_with_this_field_lt, _) = generics_with_this_field_lt.split_for_impl();
     let (_, ty_generics_with_this_field_ref_lt, _) =
         generics_with_this_field_ref_lt.split_for_impl();
 
     let this = format_ident!("this");
+
+    let mut exist_lt_phantoms = None;
+    let mut exist_lt_phantoms_proj = None;
+    if !exist_lt.is_empty() {
+        let name = (!info.is_tuple_struct).then(|| quote!(__exist_lt_phantom:));
+        let mut exist_lt_phantom: Vec<_> = exist_lt.iter().flat_map(|l| l.bounds.iter()).collect();
+        exist_lt_phantom.sort_unstable();
+        exist_lt_phantom.dedup();
+        exist_lt_phantoms =
+            Some(quote!(#name ::core::marker::PhantomData<(#(&#exist_lt_phantom ()),*)>,));
+        exist_lt_phantoms_proj = Some(quote!(#name ::core::marker::PhantomData,));
+    }
 
     let (fields_decl, fields_proj): (Vec<_>, Vec<_>) = info
         .fields
@@ -1305,12 +1464,14 @@ fn generate_projections(info: &StructInfo) -> TokenStream {
             quote! {
                 #vis struct __Projection #generics_with_this_lt (
                     #(#fields_decl)*
-                    ::core::marker::PhantomData<&'__this mut ()>,
+                    #exist_lt_phantoms
+                    ::core::marker::PhantomData<&'__this #ident #ty_generics>,
                 ) #whr;
             },
             quote! {
                 __Projection(
                     #(#fields_proj)*
+                    #exist_lt_phantoms_proj
                     ::core::marker::PhantomData,
                 )
             },
@@ -1322,12 +1483,14 @@ fn generate_projections(info: &StructInfo) -> TokenStream {
                     #whr
                 {
                     #(#fields_decl)*
-                    ___pin_phantom_data: ::core::marker::PhantomData<&'__this mut ()>,
+                    #exist_lt_phantoms
+                    ___pin_phantom_data: ::core::marker::PhantomData<&'__this #ident #ty_generics>,
                 }
             },
             quote! {
                 __Projection {
                     #(#fields_proj)*
+                    #exist_lt_phantoms_proj
                     ___pin_phantom_data: ::core::marker::PhantomData,
                 }
             },
@@ -1608,7 +1771,11 @@ fn generate_projections(info: &StructInfo) -> TokenStream {
     }
 }
 
-fn generate_the_pin_data(info: &StructInfo) -> TokenStream {
+fn generate_the_pin_data(
+    info: &StructInfo,
+    field_lt_generics: &Generics,
+    field_exist_lt_generics: &Generics,
+) -> TokenStream {
     let ItemStruct {
         vis,
         ident: struct_name,
@@ -1616,11 +1783,10 @@ fn generate_the_pin_data(info: &StructInfo) -> TokenStream {
         ..
     } = &info.struct_;
 
-    let field_lt_outlive_chain = &info.field_lt_outlive_chain;
-    let generics_with_field_lt = CombinedGenerics(vec![field_lt_outlive_chain, generics]);
+    let generics_with_field_lt = CombinedGenerics(vec![&field_exist_lt_generics, generics]);
 
     let (impl_generics, ty_generics, whr) = generics.split_for_impl();
-    let field_lt_for_generics = field_lt_outlive_chain.for_generics();
+    let field_lt_for_generics = field_lt_generics.for_generics();
     let (impl_generics_with_lt, ty_generics_with_field_lt, _) =
         generics_with_field_lt.split_for_impl();
 
@@ -1719,6 +1885,7 @@ fn generate_the_pin_data(info: &StructInfo) -> TokenStream {
         })
         .collect::<TokenStream>();
 
+    let exist_lt_generics_params = info.exist_lt.params.iter();
     quote! {
         // We declare this struct which will host all of the projection function for our type.
         #[doc(hidden)]
@@ -1773,7 +1940,7 @@ fn generate_the_pin_data(info: &StructInfo) -> TokenStream {
         {
             /// Type inference helper function.
             #[inline(always)]
-            #vis fn __make_closure<__F, __E>(self, f: __F) -> __F
+            #vis fn __make_closure<#(#exist_lt_generics_params,)* __F, __E>(self, f: __F) -> __F
             where
                 __F: #field_lt_for_generics ::core::ops::FnOnce(*mut #struct_name #ty_generics, __PinDataLt #ty_generics_with_field_lt) ->
                     ::core::result::Result<::pin_init::__internal::InitOk, __E>,
@@ -1782,7 +1949,7 @@ fn generate_the_pin_data(info: &StructInfo) -> TokenStream {
             }
 
             #[inline(always)]
-            #vis fn __with_lt #field_lt_outlive_chain(self) -> __PinDataLt #ty_generics_with_field_lt {
+            #vis fn __with_lt #field_exist_lt_generics(self) -> __PinDataLt #ty_generics_with_field_lt {
                 // Generate a zeroed to avoid naming all fields.
                 // SAFETY: `__PinDataLt` only contains phantom fields.
                 unsafe { ::core::mem::zeroed() }
