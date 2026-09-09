@@ -712,6 +712,24 @@ impl<T: ?Sized> Deref for Borrowed<T> {
     }
 }
 
+/// `Borrowed` but invariant.
+#[repr(transparent)]
+pub struct BorrowedInvariant<T: ?Sized>(PhantomInvariant<T>, PhantomPinned, T);
+
+impl<T: ?Sized> Drop for BorrowedInvariant<T> {
+    #[inline(always)]
+    fn drop(&mut self) {}
+}
+
+impl<T: ?Sized> Deref for BorrowedInvariant<T> {
+    type Target = T;
+
+    #[inline(always)]
+    fn deref(&self) -> &T {
+        &self.2
+    }
+}
+
 /// An alias of `PhantomData` but with a name to aid user in case of misuse.
 pub struct NotVisible<T: ?Sized>(PhantomData<T>);
 

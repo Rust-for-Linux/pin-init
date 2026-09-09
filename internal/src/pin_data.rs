@@ -92,6 +92,8 @@ struct BorrowedInfo {
     kind: BorrowedKind,
     /// Field lifetime for this field.
     lifetime: Lifetime,
+    // Variance of the field lifetime, as captured by other fields.
+    lt_variance: Variance,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -232,6 +234,9 @@ struct StructInfo {
     self_referential: bool,
     /// Field lifetime genercis with outlive chain.
     field_lt_outlive_chain: Generics,
+    /// Field lifetime genercis with outlive chain, with one chain for covariant fields and one
+    /// chain for invariant fields.
+    field_lt_split_variance_outlive_chain: Generics,
 }
 
 pub(crate) fn expand_with_cfg(
@@ -406,7 +411,7 @@ fn expand(
                     return None;
                 }
 
-                Some(BorrowedInfo { kind, lifetime })
+                Some(BorrowedInfo { kind, lifetime, lt_variance: Variance::default() })
             });
 
             FieldInfo {
@@ -428,6 +433,7 @@ fn expand(
                 kind: BorrowedKind::Shared,
                 // Obtaining from `field` instead of `field_name` for the correct span.
                 lifetime: Lifetime::from_ident(&field.member.as_ident()),
+                lt_variance: Variance::Covariant,
             });
         }
     }
@@ -447,11 +453,63 @@ fn expand(
     })
     .visit_generics(&struct_.generics);
 
+    // Obtain an closure of invariant fields.
+    //
+    // If invariant field captures a field lifetime, then we also need to make sure that field
+    // is also invariant. For example, say we have a struct `SelfRef<'a>` and a field `f: &'a ()`.
+    // Conceptually, a field's type must outlive the field's lifetime, so if we have a covariant
+    // `'a`, we can have a shortened `SelfRef<'short_a>` where `'f` outlives `'a`. This will enable
+    // the `&'short_a ()` to `&'f ()` coercion, which effectively shortens `'f` too, so we break the
+    // invariance of the field lifetime.
+    let mut invariant_field_idx = BTreeSet::new();
+    let mut worklist = Vec::new();
+    for field in fields.iter() {
+        for borrow in field.captures.iter() {
+            if let Variance::Invariant = borrow.variance {
+                let Some(borrow_idx) = fields
+                    .iter()
+                    .position(|f| f.member.as_ident() == borrow.lifetime.ident)
+                else {
+                    continue;
+                };
+                if invariant_field_idx.insert(borrow_idx) {
+                    worklist.push(&fields[borrow_idx]);
+                }
+            }
+        }
+    }
+    while let Some(field) = worklist.pop() {
+        for borrow in field.captures.iter() {
+            let Some(borrow_idx) = fields
+                .iter()
+                .position(|f| f.member.as_ident() == borrow.lifetime.ident)
+            else {
+                continue;
+            };
+            let borrow = &fields[borrow_idx];
+            if invariant_field_idx.insert(borrow_idx) {
+                worklist.push(borrow);
+            }
+        }
+    }
+    for idx in invariant_field_idx {
+        fields[idx].borrowed.as_mut().unwrap().lt_variance = Variance::Invariant;
+    }
+
     // Create a lifetime parameter for each field.
     let borrowed_fields: Vec<_> = fields
         .iter()
         .filter_map(|f| Some(f.borrowed.as_ref()?))
         .collect();
+    let borrowed_covariant_fields: Vec<_> = borrowed_fields
+        .iter()
+        .filter(|f| f.lt_variance == Variance::Covariant)
+        .collect();
+    let borrowed_invariant_fields: Vec<_> = borrowed_fields
+        .iter()
+        .filter(|f| f.lt_variance == Variance::Invariant)
+        .collect();
+
     let field_lifetime_outlive_chain = Generics {
         lt_token: None,
         params: borrowed_fields
@@ -473,6 +531,79 @@ fn expand(
         where_clause: None,
     };
 
+    let mut field_lt_split_variance_outlive_chain = Generics {
+        lt_token: Some(Default::default()),
+        params: borrowed_covariant_fields
+            .iter()
+            .zip(std::iter::once(None).chain(borrowed_covariant_fields.iter().map(Some)))
+            .map(|(borrowed, prev)| {
+                GenericParam::Lifetime(LifetimeParam {
+                    attrs: Vec::new(),
+                    lifetime: borrowed.lifetime.clone(),
+                    colon_token: None,
+                    bounds: prev
+                        .iter()
+                        .map(|borrowed| borrowed.lifetime.clone())
+                        .collect(),
+                })
+            })
+            .chain(
+                borrowed_invariant_fields
+                    .iter()
+                    .zip(std::iter::once(None).chain(borrowed_invariant_fields.iter().map(Some)))
+                    .map(|(borrowed, prev)| {
+                        GenericParam::Lifetime(LifetimeParam {
+                            attrs: Vec::new(),
+                            lifetime: borrowed.lifetime.clone(),
+                            colon_token: None,
+                            bounds: prev
+                                .iter()
+                                .map(|borrowed| borrowed.lifetime.clone())
+                                .collect(),
+                        })
+                    }),
+            )
+            .collect(),
+        gt_token: Some(Default::default()),
+        where_clause: None,
+    };
+
+    // For `field_lt_split_variance_outlive_chain`, we may need to insert some additonal bounds for
+    // types to be WF.
+    for f in fields.iter() {
+        let Some(borrowed) = &f.borrowed else {
+            continue;
+        };
+
+        // If a field is invariant, then the invariance closure rule will make all borrowed fields
+        // to be invariant, so they're already captured in `field_lt_split_variance_outlive_chain`.
+        if borrowed.lt_variance != Variance::Covariant {
+            continue;
+        }
+
+        for capture in f.captures.iter() {
+            let Some(&idx) = field_idx_map.get(&capture.lifetime.ident) else {
+                continue;
+            };
+
+            let prev_borrowed = fields[idx].borrowed.as_ref().unwrap();
+
+            // If borrowed field is covariant, it's already captured in
+            // `field_lt_split_variance_outlive_chain`.
+            if prev_borrowed.lt_variance == Variance::Invariant {
+                // Covariant field borrowing an invariant field. This is not captured in the chain
+                // so we need to add additional bound. This bound is okay, as the invariant lifetime
+                // is the longer living one, so arbitrary shortening of the covariant one does not
+                // violate their relation.
+                let param = field_lt_split_variance_outlive_chain
+                    .lifetimes_mut()
+                    .find(|l| l.lifetime == prev_borrowed.lifetime)
+                    .unwrap();
+                param.bounds.push(borrowed.lifetime.clone());
+            }
+        }
+    }
+
     struct_.fields = Fields::Unit;
     let info = StructInfo {
         self_referential: fields
@@ -484,6 +615,7 @@ fn expand(
         field_idx_map,
         is_tuple_struct,
         field_lt_outlive_chain: field_lifetime_outlive_chain,
+        field_lt_split_variance_outlive_chain,
     };
 
     for field in &info.fields {
@@ -591,8 +723,13 @@ fn generate_struct_def(info: &StructInfo) -> TokenStream {
             ty = quote!(::pin_init::__internal::Erase<#ty>);
         };
 
-        if field.borrowed.is_some() {
-            ty = quote!(::pin_init::__internal::Borrowed<#ty>);
+        if let Some(borrowed) = &field.borrowed {
+            if matches!(borrowed.lt_variance, Variance::Invariant) {
+                // If we need to mark this field as invariant but it is not done so already by `Erase`'s invariance.
+                ty = quote!(::pin_init::__internal::BorrowedInvariant<#ty>);
+            } else {
+                ty = quote!(::pin_init::__internal::Borrowed<#ty>);
+            }
         }
 
         quote! {
@@ -788,7 +925,8 @@ fn generate_drop_order_check(dcx: &mut DiagCtxt, info: &StructInfo) -> TokenStre
     // with known lifetime bounds as bounds on the function, and asks Rust to *prove* that the types
     // are wellformed, given the bounds.
 
-    let generics_with_field_lt = CombinedGenerics(vec![&info.field_lt_outlive_chain, generics]);
+    let generics_with_field_lt =
+        CombinedGenerics(vec![&info.field_lt_split_variance_outlive_chain, generics]);
 
     let (_, ty_generics, _) = generics.split_for_impl();
     let (impl_generics_with_field_lt, _, _) = generics_with_field_lt.split_for_impl();
@@ -802,25 +940,35 @@ fn generate_drop_order_check(dcx: &mut DiagCtxt, info: &StructInfo) -> TokenStre
         });
 
     // Construct bounds where generic lifetime outlives field lifetimes, so field types can refer to generics.
-    if let Some(last_field_lt) = info
+    for field in info
         .fields
         .iter()
-        .filter_map(|f| Some(&f.borrowed.as_ref()?.lifetime))
+        .filter_map(|f| Some(f.borrowed.as_ref()?))
+        .filter(|f| f.lt_variance == Variance::Covariant)
         .last()
+        .into_iter()
+        .chain(
+            info.fields
+                .iter()
+                .filter_map(|f| Some(f.borrowed.as_ref()?))
+                .filter(|f| f.lt_variance == Variance::Invariant)
+                .last(),
+        )
     {
+        let field_lt = &field.lifetime;
         for param in generics.params.iter() {
             match param {
                 GenericParam::Lifetime(param) => {
                     let lifetime = &param.lifetime;
                     where_clause
                         .predicates
-                        .push(parse_quote!(#lifetime: #last_field_lt));
+                        .push(parse_quote!(#lifetime: #field_lt));
                 }
                 GenericParam::Type(param) => {
                     let ident = &param.ident;
                     where_clause
                         .predicates
-                        .push(parse_quote!(#ident: #last_field_lt));
+                        .push(parse_quote!(#ident: #field_lt));
                 }
                 GenericParam::Const(_) => (),
             }
@@ -1371,7 +1519,7 @@ fn generate_the_pin_data(info: &StructInfo) -> TokenStream {
 
             let (slot_ty, slot_arg) = match &f.borrowed {
                 None => (quote!(Slot), quote!()),
-                Some(BorrowedInfo{ kind: BorrowedKind::Shared, lifetime }) => (
+                Some(BorrowedInfo{ kind: BorrowedKind::Shared, lifetime, .. }) => (
                     // For borrowed fields, create a `SelfRefSlot`, which after initialization
                     // turns into a `SelfRefDropGuard` instead of `DropGuard`.
                     //
@@ -1387,7 +1535,7 @@ fn generate_the_pin_data(info: &StructInfo) -> TokenStream {
                     quote!(SelfRefSlot),
                     quote!(#lifetime, ::pin_init::__internal::Shared, ),
                 ),
-                Some(BorrowedInfo{ kind: BorrowedKind::Mutable, lifetime }) => (
+                Some(BorrowedInfo{ kind: BorrowedKind::Mutable, lifetime, .. }) => (
                     // For borrowed fields, create a `SelfRefSlot`, which after initialization
                     // turns into a `SelfRefDropGuard` instead of `DropGuard`.
                     //
