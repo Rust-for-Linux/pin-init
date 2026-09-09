@@ -1,0 +1,15 @@
+error: lifetime may not live long enough
+  --> tests/ui/compile-fail/pin_data/selfref_invariant_field_lt.rs:26:5
+   |
+22 | fn shorten<'long: 'short, 'short>(
+   |            -----          ------ lifetime `'short` defined here
+   |            |
+   |            lifetime `'long` defined here
+...
+26 |     x
+   |     ^ function was supposed to return data with lifetime `'long` but it is returning data with lifetime `'short`
+   |
+   = help: consider adding the following bound: `'short: 'long`
+   = note: requirement occurs because of the type `SelfRef<'_>`, which makes the generic argument `'_` invariant
+   = note: the struct `SelfRef<'a>` is invariant over the parameter `'a`
+   = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
