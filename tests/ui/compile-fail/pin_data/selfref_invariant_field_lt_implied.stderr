@@ -1,0 +1,33 @@
+error: lifetime may not live long enough
+  --> tests/ui/compile-fail/pin_data/selfref_invariant_field_lt_implied.rs:20:13
+   |
+15 | #[pin_data]
+   | ----------- in this attribute macro expansion
+...
+20 |     marker: PhantomData<&'early &'later ()>,
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ requires that `'later` must outlive `'early`
+...
+23 |     early: String,
+   |     ----- lifetime `'early` defined here
+24 |     later: &'a str,
+   |     ----- lifetime `'later` defined here
+   |
+   = help: consider adding the following bound: `'later: 'early`
+   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: lifetime may not live long enough
+  --> tests/ui/compile-fail/pin_data/selfref_invariant_field_lt_implied.rs:20:13
+   |
+15 | #[pin_data]
+   | ----------- in this attribute macro expansion
+16 | struct Foo<'a> {
+   |            -- lifetime `'a` defined here
+...
+20 |     marker: PhantomData<&'early &'later ()>,
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ requires that `'a` must outlive `'early`
+...
+23 |     early: String,
+   |     ----- lifetime `'early` defined here
+   |
+   = help: consider adding the following bound: `'a: 'early`
+   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
