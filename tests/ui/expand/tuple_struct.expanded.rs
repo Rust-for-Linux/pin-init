@@ -9,7 +9,7 @@ const _: () = {
         &'__this mut &'a mut [T; N],
         ::core::pin::Pin<&'__this mut PhantomPinned>,
         &'__this mut usize,
-        ::core::marker::PhantomData<&'__this mut ()>,
+        ::core::marker::PhantomData<&'__this Foo<'a, T, N>>,
     );
     /// Pin-projections of [`Foo`]
     #[allow(dead_code, non_snake_case)]
