@@ -321,10 +321,12 @@ fn generate_projections(
     is_tuple_struct: bool,
     fields: &[FieldInfo<'_>],
 ) -> TokenStream {
-    let (impl_generics, ty_generics, _) = generics.split_for_impl();
-    let mut generics_with_pin_lt = generics.clone();
-    generics_with_pin_lt.params.insert(0, parse_quote!('__pin));
-    let (_, ty_generics_with_pin_lt, whr) = generics_with_pin_lt.split_for_impl();
+    let pin_lt_generics: Generics = parse_quote!(<'__pin>);
+    let generics_with_pin_lt = CombinedGenerics(vec![&pin_lt_generics, generics]);
+
+    let (impl_generics, ty_generics, whr) = generics.split_for_impl();
+    let (_, ty_generics_with_pin_lt, _) = generics_with_pin_lt.split_for_impl();
+
     let projection = format_ident!("{ident}Projection");
     let this = format_ident!("this");
 

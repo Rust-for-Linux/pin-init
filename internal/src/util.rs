@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use proc_macro2::{Ident, TokenStream};
-use quote::format_ident;
-use syn::{Attribute, Index, Member};
+use quote::{format_ident, ToTokens};
+use syn::{Attribute, GenericParam, Generics, Index, Member, Token};
 
 pub(crate) trait AttrListExt {
     fn extract_cfg_attrs(&mut self) -> Vec<TokenStream>;
@@ -50,5 +50,164 @@ impl MemberExt for Member {
             Member::Named(ident) => format!("`{ident}`"),
             Member::Unnamed(Index { index, .. }) => format!("index `{index}`"),
         }
+    }
+}
+
+pub(crate) struct CombinedGenerics<'a>(pub(crate) Vec<&'a Generics>);
+pub(crate) struct CombinedImplGenerics<'a>(&'a CombinedGenerics<'a>);
+pub(crate) struct CombinedTypeGenerics<'a>(&'a CombinedGenerics<'a>);
+
+impl CombinedGenerics<'_> {
+    pub(crate) fn split_for_impl(
+        &self,
+    ) -> (
+        CombinedImplGenerics<'_>,
+        CombinedTypeGenerics<'_>,
+        // A stub type so `split_for_impl` signature matches that of `syn`'s.
+        impl Sized,
+    ) {
+        (CombinedImplGenerics(self), CombinedTypeGenerics(self), ())
+    }
+}
+
+impl ToTokens for CombinedGenerics<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        // Most of the time we are only adding lifetimes, so we prefer to place the user provided generics last.
+        self.0
+            .last()
+            .and_then(|x| x.lt_token)
+            .unwrap_or_default()
+            .to_tokens(tokens);
+
+        let comma: Token![,] = Default::default();
+
+        // Output lifetimes first.
+        for generics in self.0.iter() {
+            for param in generics.params.pairs() {
+                if let GenericParam::Lifetime(lt) = param.value() {
+                    lt.to_tokens(tokens);
+                    param.punct().unwrap_or(&&comma).to_tokens(tokens);
+                }
+            }
+        }
+
+        for generics in self.0.iter() {
+            for param in generics.params.pairs() {
+                if let GenericParam::Lifetime(_) = param.value() {
+                    continue;
+                };
+                param.value().to_tokens(tokens);
+                param.punct().unwrap_or(&&comma).to_tokens(tokens);
+            }
+        }
+
+        self.0
+            .last()
+            .and_then(|x| x.gt_token)
+            .unwrap_or_default()
+            .to_tokens(tokens);
+    }
+}
+
+impl ToTokens for CombinedImplGenerics<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.0
+             .0
+            .last()
+            .and_then(|x| x.lt_token)
+            .unwrap_or_default()
+            .to_tokens(tokens);
+
+        let comma: Token![,] = Default::default();
+
+        // Output lifetimes first.
+        for generics in self.0 .0.iter() {
+            for param in generics.params.pairs() {
+                if let GenericParam::Lifetime(lt) = param.value() {
+                    lt.to_tokens(tokens);
+                    param.punct().unwrap_or(&&comma).to_tokens(tokens);
+                }
+            }
+        }
+
+        for generics in self.0 .0.iter() {
+            for param in generics.params.pairs() {
+                // Leave out defaults.
+                match param.value() {
+                    GenericParam::Lifetime(_) => continue,
+                    GenericParam::Type(param) => {
+                        param.ident.to_tokens(tokens);
+                        if !param.bounds.is_empty() {
+                            param
+                                .colon_token
+                                .unwrap_or_else(Default::default)
+                                .to_tokens(tokens);
+                            param.bounds.to_tokens(tokens);
+                        }
+                    }
+                    GenericParam::Const(param) => {
+                        param.const_token.to_tokens(tokens);
+                        param.ident.to_tokens(tokens);
+                        param.colon_token.to_tokens(tokens);
+                        param.ty.to_tokens(tokens);
+                    }
+                }
+                param.punct().unwrap_or(&&comma).to_tokens(tokens);
+            }
+        }
+
+        self.0
+             .0
+            .last()
+            .and_then(|x| x.gt_token)
+            .unwrap_or_default()
+            .to_tokens(tokens);
+    }
+}
+
+impl ToTokens for CombinedTypeGenerics<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.0
+             .0
+            .last()
+            .and_then(|x| x.lt_token)
+            .unwrap_or_default()
+            .to_tokens(tokens);
+
+        let comma: Token![,] = Default::default();
+
+        // Output lifetimes first.
+        for generics in self.0 .0.iter() {
+            for param in generics.params.pairs() {
+                if let GenericParam::Lifetime(lt) = param.value() {
+                    // Leave out bounds
+                    lt.lifetime.to_tokens(tokens);
+                    param.punct().unwrap_or(&&comma).to_tokens(tokens);
+                }
+            }
+        }
+
+        for generics in self.0 .0.iter() {
+            for param in generics.params.pairs() {
+                // Leave out bounds and defaults.
+                match param.value() {
+                    GenericParam::Lifetime(_) => continue,
+                    GenericParam::Type(param) => {
+                        param.ident.to_tokens(tokens);
+                    }
+                    GenericParam::Const(param) => {
+                        param.ident.to_tokens(tokens);
+                    }
+                }
+                param.punct().unwrap_or(&&comma).to_tokens(tokens);
+            }
+        }
+
+        self.0
+             .0
+            .last()
+            .and_then(|x| x.gt_token)
+            .unwrap_or_default()
+            .to_tokens(tokens);
     }
 }
