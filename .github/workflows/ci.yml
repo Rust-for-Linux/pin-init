@@ -294,8 +294,11 @@ jobs:
             --cfg NO_ALLOC_FAIL_TESTS
             -Z sanitizer=leak
             -Dwarnings
-  msrv:
+
+  rust-versions:
     runs-on: ubuntu-latest
+    outputs:
+      versions: ${{steps.versions.outputs.versions}}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -304,6 +307,34 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
+      - id: versions
+        name: Compute version matrix
+        run: |
+          msrv_minor=$(cargo metadata --format-version=1 | jq '.packages[] | select(.name == "pin-init") | .rust_version | split(".")[1]' -r)
+          latest_minor=$(rustc -vV | grep -Po '(?<=release: 1\.)\d+')
+
+          versions="["
+          for minor in $(seq $msrv_minor $latest_minor); do
+            versions="${versions}\"1.${minor}\","
+          done
+          versions="${versions%,}]"
+
+          echo "versions=${versions}" >> "$GITHUB_OUTPUT"
+  msrv:
+    needs: rust-versions
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ${{fromJSON(needs.rust-versions.outputs.versions)}}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: ${{github.event.pull_request.commits}}
+          ref: ${{github.event.pull_request.head.sha}}
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{matrix.rust}}
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-hack
@@ -317,8 +348,6 @@ jobs:
             --exclude-features alloc \
             --exclude-features unsafe-pinned \
             --exclude-features default \
-            --version-range 1.82.. \
-            --clean-per-version \
             test \
             --locked \
             --all-targets
@@ -327,7 +356,12 @@ jobs:
         env:
           RUSTFLAGS: "-Dwarnings"
   nightly-msrv:
+    needs: rust-versions
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ${{fromJSON(needs.rust-versions.outputs.versions)}}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -335,7 +369,7 @@ jobs:
           ref: ${{github.event.pull_request.head.sha}}
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{matrix.rust}}
           components: rust-src
       - uses: taiki-e/install-action@v2
         with:
@@ -347,8 +381,6 @@ jobs:
           cargo hack \
             --clean-per-run \
             --feature-powerset \
-            --version-range 1.82.. \
-            --clean-per-version \
             check \
             --locked \
             --all-targets
@@ -357,6 +389,7 @@ jobs:
         env:
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: "-Dwarnings"
+
   os-check:
     strategy:
       fail-fast: false
