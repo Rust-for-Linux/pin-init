@@ -82,7 +82,7 @@ jobs:
             --all-targets \
             --locked \
             --features alloc
-          cargo clean' > exec.sh
+          cargo clean --workspace' > exec.sh
           git rebase --exec 'bash exec.sh' --root
         env:
           RUSTFLAGS: "-Dwarnings"
@@ -96,7 +96,7 @@ jobs:
             clippy \
             --lib \
             --locked
-          cargo clean' > exec.sh
+          cargo clean --workspace' > exec.sh
           git rebase --exec "bash exec.sh" --root
         env:
           RUSTFLAGS: "-Dwarnings"
@@ -151,7 +151,7 @@ jobs:
             --feature-powerset \
             ${{matrix.kind}} \
             --locked
-          cargo clean' > exec.sh
+          cargo clean --workspace' > exec.sh
           git rebase --exec "bash exec.sh" --root
         env:
           RUSTFLAGS: "-Dwarnings"
@@ -186,7 +186,7 @@ jobs:
             --feature-powerset \
             ${{matrix.kind}} \
             --locked
-          cargo clean' > exec.sh
+          cargo clean --workspace' > exec.sh
           git rebase --exec "bash exec.sh" --root
         env:
           RUSTFLAGS: "-Dwarnings"
@@ -351,7 +351,7 @@ jobs:
             test \
             --locked \
             --all-targets
-          cargo clean' > exec.sh
+          cargo clean --workspace || cargo clean' > exec.sh
           git rebase --exec "bash exec.sh" --root
         env:
           RUSTFLAGS: "-Dwarnings"
@@ -384,7 +384,7 @@ jobs:
             check \
             --locked \
             --all-targets
-          cargo clean' > exec.sh
+          cargo clean --workspace || cargo clean' > exec.sh
           git rebase --exec "bash exec.sh" --root
         env:
           RUSTC_BOOTSTRAP: 1
