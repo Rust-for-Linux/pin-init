@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Tuple structs are now supported. For `[pin_]init!` , if pinning (`<-` syntax) is required, only
+  the struct syntax can be used, e.g. `init!(Foo { 0: value, 1 <- initializer })`.
 - `[pin_]init_scope` functions to run arbitrary code inside of an initializer.
 - `&'static mut MaybeUninit<T>` now implements `InPlaceWrite`. This enables users to use external
   allocation mechanisms such as `static_cell`.

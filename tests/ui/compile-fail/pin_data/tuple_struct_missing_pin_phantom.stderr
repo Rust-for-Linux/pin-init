@@ -1,0 +1,13 @@
+error: use of deprecated function `_::warn`:
+       The field index `1` of type `PhantomPinned` only has an effect if it has the `#[pin]` attribute
+ --> tests/ui/compile-fail/pin_data/tuple_struct_missing_pin_phantom.rs:6:20
+  |
+6 | struct Tuple<T>(T, core::marker::PhantomPinned);
+  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+note: the lint level is defined here
+ --> tests/ui/compile-fail/pin_data/tuple_struct_missing_pin_phantom.rs:1:9
+  |
+1 | #![deny(warnings)]
+  |         ^^^^^^^^
+  = note: `#[deny(deprecated)]` implied by `#[deny(warnings)]`

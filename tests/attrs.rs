@@ -13,8 +13,17 @@ struct Foo {
     member: u8,
 }
 
+#[pin_data]
+#[derive(serde::Serialize)]
+struct Tuple(
+    #[pin]
+    #[serde()]
+    u8,
+);
+
 #[test]
 fn test_attribute() {
     stack_pin_init!(let p = init!(Foo { member: 0 }));
     println!("{}", p.member);
+    let _ = Tuple(0);
 }
