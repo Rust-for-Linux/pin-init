@@ -1,13 +1,17 @@
 error[E0599]: no method named `_2` found for struct `__ThePinData` in the current scope
- --> tests/ui/compile-fail/init/tuple_invalid_field.rs:7:13
+ --> tests/ui/compile-fail/init/tuple_invalid_field.rs:7:43
   |
 3 | #[pin_data]
   | ----------- method `_2` not found for this struct
 ...
 7 |     let _ = pin_init!(Tuple { 0: 1, 1: 2, 2: 3 });
-  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |                                           ^
   |
-  = note: this error originates in the macro `pin_init` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: there is a method `_0` with a similar name
+  |
+7 -     let _ = pin_init!(Tuple { 0: 1, 1: 2, 2: 3 });
+7 +     let _ = pin_init!(Tuple { 0: 1, 1: 2, _0: 3 });
+  |
 
 error[E0609]: no field `2` on type `Tuple`
  --> tests/ui/compile-fail/init/tuple_invalid_field.rs:7:43
