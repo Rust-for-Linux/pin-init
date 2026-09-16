@@ -2,11 +2,11 @@ use pin_init::*;
 struct Foo {}
 fn main() {
     let _ = {
-        let __data = unsafe {
+        let data = unsafe {
             use ::pin_init::__internal::HasInitData;
             Foo::__init_data()
         };
-        let init = __data
+        let init = data
             .__make_closure::<
                 _,
                 ::core::convert::Infallible,
