@@ -20,17 +20,12 @@ note: tuple variant defined here
    |     ^^
 
 warning: unreachable statement
-  --> tests/ui/compile-fail/init/early_return.rs:8:13
+  --> tests/ui/compile-fail/init/early_return.rs:12:9
    |
- 8 |       let _ = init!(Foo {
-   |  _____________^
- 9 | |         _: {
-10 | |             return Ok(());
-   | |             ------------- any code following this expression is unreachable
-11 | |         },
-12 | |         a: 42,
-13 | |     });
-   | |______^ unreachable statement
+10 |             return Ok(());
+   |             ------------- any code following this expression is unreachable
+11 |         },
+12 |         a: 42,
+   |         ^^^^^ unreachable statement
    |
    = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
-   = note: this warning originates in the macro `init` (in Nightly builds, run with -Z macro-backtrace for more info)
