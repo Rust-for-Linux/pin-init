@@ -142,11 +142,11 @@ const _: () = {
 fn main() {
     let mut first = [1u8, 2, 3];
     let _ = {
-        let __data = unsafe {
+        let data = unsafe {
             use ::pin_init::__internal::HasInitData;
             Foo::__init_data()
         };
-        let init = __data
+        let init = data
             .__make_closure::<
                 _,
                 ::core::convert::Infallible,
@@ -200,11 +200,11 @@ fn main() {
     };
     let mut second = [4u8, 5, 6];
     let _ = {
-        let __data = unsafe {
+        let data = unsafe {
             use ::pin_init::__internal::HasInitData;
             Foo::__init_data()
         };
-        let init = __data
+        let init = data
             .__make_closure::<
                 _,
                 ::core::convert::Infallible,

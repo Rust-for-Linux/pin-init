@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens, TokenStreamExt};
+use quote::{format_ident, quote, quote_spanned, ToTokens, TokenStreamExt};
 use syn::{
     braced, parenthesized,
     parse::{End, Parse},
@@ -269,7 +269,6 @@ fn expand(
         },
         |(_, err)| Box::new(err),
     );
-    let slot = format_ident!("slot");
     let (has_data_trait, get_data, init_from_closure) = if pinned {
         (
             format_ident!("HasPinData"),
@@ -286,7 +285,7 @@ fn expand(
     let init_kind = get_init_kind(rest, dcx);
     let zeroable_check = match init_kind {
         InitKind::Normal => quote!(),
-        InitKind::Zeroing => quote! {
+        InitKind::Zeroing => quote_spanned! { Span::mixed_site() =>
             // The user specified `..Zeroable::zeroed()` at the end of the list of fields.
             // Therefore we check if the struct implements `Zeroable` and then zero the memory.
             // This allows us to also remove the check that all fields are present (since we
@@ -295,34 +294,33 @@ fn expand(
             where T: ::pin_init::Zeroable
             {}
             // Ensure that the struct is indeed `Zeroable`.
-            assert_zeroable(#slot);
+            assert_zeroable(slot);
             // SAFETY: The type implements `Zeroable` by the check above.
-            unsafe { ::core::ptr::write_bytes(#slot, 0, 1) };
+            unsafe { ::core::ptr::write_bytes(slot, 0, 1) };
         },
     };
     let this = match this {
         None => quote!(),
-        Some(This { ident, .. }) => quote! {
+        Some(This { ident, .. }) => quote_spanned! { Span::mixed_site() =>
             // Create the `this` so it can be referenced by the user inside of the
             // expressions creating the individual fields.
             let #ident = unsafe { ::core::ptr::NonNull::new_unchecked(slot) };
         },
     };
     // `mixed_site` ensures that the data is not accessible to the user-controlled code.
-    let data = Ident::new("__data", Span::mixed_site());
-    let init_fields = init_fields(&fields, pinned, &data, &slot);
+    let init_fields = init_fields(&fields, pinned);
     let field_check = make_field_check(&fields, init_kind, &path);
-    Ok(quote! {{
+    Ok(quote_spanned! { Span::mixed_site() => {
         // Get the data about fields from the supplied type.
         // SAFETY: TODO
-        let #data = unsafe {
+        let data = unsafe {
             use ::pin_init::__internal::#has_data_trait;
             // Can't use `<#path as #has_data_trait>::#get_data`, since the user is able to omit
             // generics (which need to be present with that syntax).
             #path::#get_data()
         };
-        // Ensure that `#data` really is of type `#data` and help with type inference:
-        let init = #data.__make_closure::<_, #error>(
+        // Ensure that `data` really is of type `data` and help with type inference:
+        let init = data.__make_closure::<_, #error>(
             move |slot| {
                 #zeroable_check
                 #this
@@ -380,12 +378,7 @@ fn get_init_kind(rest: Option<(Token![..], Expr)>, dcx: &mut DiagCtxt) -> InitKi
 }
 
 /// Generate the code that initializes the fields of the struct using the initializers in `field`.
-fn init_fields(
-    fields: &Punctuated<InitializerField, Token![,]>,
-    pinned: bool,
-    data: &Ident,
-    slot: &Ident,
-) -> TokenStream {
+fn init_fields(fields: &Punctuated<InitializerField, Token![,]>, pinned: bool) -> TokenStream {
     let mut guards = vec![];
     let mut guard_attrs = vec![];
     let mut res = TokenStream::new();
@@ -411,18 +404,19 @@ fn init_fields(
             }
         };
         let ident = member.as_ident();
+        let span = Span::mixed_site().located_at(ident.span());
 
         let slot = if pinned {
-            quote! {
+            quote_spanned! { span =>
                 // SAFETY:
                 // - `slot` is valid and properly aligned.
                 // - `make_field_check` checks that `&raw mut (*slot).#member` is properly aligned.
                 // - `make_field_check` prevents `#member` from being used twice, therefore
                 //   `(*slot).#member` is exclusively accessed and has not been initialized.
-                (unsafe { #data.#ident(#slot) })
+                (unsafe { data.#ident(slot) })
             }
         } else {
-            quote! {
+            quote_spanned! { span =>
                 // For `init!()` macro, everything is unpinned.
                 // SAFETY:
                 // - `&raw mut (*slot).#member` is valid.
@@ -431,7 +425,7 @@ fn init_fields(
                 //   `(*slot).#member` is exclusively accessed and has not been initialized.
                 (unsafe {
                     ::pin_init::__internal::Slot::<::pin_init::__internal::Unpinned, _>::new(
-                        &raw mut (*#slot).#member
+                        &raw mut (*slot).#member
                     )
                 })
             }
@@ -439,6 +433,7 @@ fn init_fields(
 
         // `mixed_site` ensures that the guard is not accessible to the user-controlled code.
         let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
+        let full_span = kind.span();
 
         let init = match kind {
             InitializerKind::Value { value, .. } => {
@@ -447,14 +442,13 @@ fn init_fields(
                     .map(|(_, value)| quote!(#value))
                     .unwrap_or_else(|| quote!(#member));
 
-                quote! {
+                quote_spanned! { full_span =>
                     #(#attrs)*
                     let mut #guard = #slot.write(#value);
-
                 }
             }
             InitializerKind::Init { value, .. } => {
-                quote! {
+                quote_spanned! { full_span =>
                     #(#attrs)*
                     let mut #guard = #slot.init(#value)?;
                 }
@@ -465,7 +459,7 @@ fn init_fields(
         // A tuple field has no name that could be bound here (the `_0` identifiers are considered
         // implementation detail and not user-facing).
         let binding = match member {
-            Member::Named(ident) => quote! {
+            Member::Named(ident) => quote_spanned! { span =>
                 #(#cfgs)*
                 // Allow `non_snake_case` since the same warning is going to be reported for the
                 // struct field.
@@ -512,7 +506,7 @@ fn make_field_check(
             ..::core::mem::zeroed()
         }),
     };
-    quote! {
+    quote_spanned! { Span::mixed_site() =>
         #[allow(unreachable_code)]
         // We use unreachable code to perform field checks. They're still checked by the compiler.
         // SAFETY: this code is never executed.

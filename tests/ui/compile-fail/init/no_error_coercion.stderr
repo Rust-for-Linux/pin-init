@@ -1,14 +1,11 @@
 error[E0277]: `?` couldn't convert the error to `std::alloc::AllocError`
-  --> tests/ui/compile-fail/init/no_error_coercion.rs:19:22
+  --> tests/ui/compile-fail/init/no_error_coercion.rs:18:15
    |
-16 | /         init!(Self {
-17 | |             a: Box::new(42),
-18 | |             bar <- init!(Bar { b: 42 }),
-19 | |         }? AllocError)
-   | |                      ^
-   | |                      |
-   | |______________________the trait `From<!>` is not implemented for `std::alloc::AllocError`
-   |                        this can't be annotated with `?` because it has type `Result<_, !>`
+18 |             bar <- init!(Bar { b: 42 }),
+   |             --^------------------------
+   |             | |
+   |             | the trait `From<!>` is not implemented for `std::alloc::AllocError`
+   |             this can't be annotated with `?` because it has type `Result<_, !>`
    |
    = note: the question mark operation (`?`) implicitly performs a conversion on the error value using the `From` trait
    = note: this error originates in the macro `init` (in Nightly builds, run with -Z macro-backtrace for more info)
