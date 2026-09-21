@@ -4,8 +4,15 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, ToTokens};
 use syn::{Attribute, GenericParam, Generics, Index, Member, Token};
 
+use crate::DiagCtxt;
+
 pub(crate) trait AttrListExt {
     fn extract_cfg_attrs(&mut self) -> Vec<TokenStream>;
+
+    /// Extract attribute with identifier `path`.
+    ///
+    /// Report error if the attribute appears multiple times.
+    fn extract_single_attr(&mut self, dcx: &DiagCtxt, path: &str) -> Option<Attribute>;
 }
 
 impl AttrListExt for Vec<Attribute> {
@@ -24,6 +31,24 @@ impl AttrListExt for Vec<Attribute> {
         }
 
         cfg
+    }
+
+    fn extract_single_attr(&mut self, dcx: &DiagCtxt, path: &str) -> Option<Attribute> {
+        // FIXME: Replace with `extract_if` when MSRV >= 1.85.
+        let attr_pos = self.iter().position(|attr| attr.path().is_ident(path))?;
+        let attr = self.remove(attr_pos);
+        self.retain(|attr| {
+            if !attr.path().is_ident(path) {
+                return true;
+            }
+
+            dcx.error(
+                attr,
+                format!("`#[{path}]` attribute specified more than once"),
+            );
+            false
+        });
+        Some(attr)
     }
 }
 
