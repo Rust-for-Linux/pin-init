@@ -1,0 +1,19 @@
+error: expected nothing or `..Zeroable::init_zeroed()`.
+  --> tests/ui/compile-fail/zeroable/invalid_spread.rs:15:9
+   |
+15 |         ..MyZeroable::init_zeroed()
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Zeroable as MyZeroable`
+ --> tests/ui/compile-fail/zeroable/invalid_spread.rs:4:5
+  |
+4 | use Zeroable as MyZeroable;
+  |     ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0063]: missing field `b` in initializer of `Foo`
+  --> tests/ui/compile-fail/zeroable/invalid_spread.rs:13:19
+   |
+13 |     let _ = init!(Foo {
+   |                   ^^^ missing `b`
