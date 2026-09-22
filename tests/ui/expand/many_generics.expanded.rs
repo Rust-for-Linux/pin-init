@@ -162,24 +162,18 @@ const _: () = {
         }
     }
     #[allow(dead_code, non_snake_case)]
-    struct __Unpin<'__pin, 'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
+    struct __Unpin<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
     where
         T: Bar<'a, 1>,
     {
-        __phantom_pin: ::pin_init::__internal::PhantomInvariantLifetime<'__pin>,
         __phantom: ::pin_init::__internal::PhantomInvariant<Foo<'a, 'b, T, SIZE>>,
         _pin: PhantomPinned,
     }
     #[doc(hidden)]
-    impl<
-        '__pin,
-        'a,
-        'b: 'a,
-        T: Bar<'b> + ?Sized + 'a,
-        const SIZE: usize,
-    > ::core::marker::Unpin for Foo<'a, 'b, T, SIZE>
+    impl<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize> ::core::marker::Unpin
+    for Foo<'a, 'b, T, SIZE>
     where
-        __Unpin<'__pin, 'a, 'b, T, SIZE>: ::core::marker::Unpin,
+        for<'__dummy> __Unpin<'a, 'b, T, SIZE>: ::core::marker::Unpin,
         T: Bar<'a, 1>,
     {}
     impl<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize> ::core::ops::Drop
