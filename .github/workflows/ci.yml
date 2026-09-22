@@ -448,6 +448,15 @@ jobs:
               false
           fi
         working-directory: pin-init
+      - name: Run checkpatch.pl
+        run: |
+          if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/pin-init-next)" ]; then
+              # when there are no new commits, we can succeed directly
+              exit 0
+          fi
+          # Commit ID does not match between two trees, so ignore it.
+          scripts/checkpatch.pl --git origin/pin-init-next..HEAD --ignore UNKNOWN_COMMIT_ID
+        working-directory: kernel
 
   update:
     runs-on: ubuntu-latest
