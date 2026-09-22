@@ -11,6 +11,8 @@ note: required because it appears within the type `__Unpin<'_, usize>`
    |
  4 | #[pin_data]
    | ^^^^^^^^^^^
+ 5 | struct Tuple<T>(#[pin] PhantomPinned, T);
+   |                        ------------- required by this field
 note: required for `Tuple<usize>` to implement `Unpin`
   --> tests/ui/compile-fail/pin_data/tuple_struct_pinned_field_not_unpin.rs:4:1
    |
