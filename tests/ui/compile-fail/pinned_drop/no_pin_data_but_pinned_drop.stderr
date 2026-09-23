@@ -1,4 +1,4 @@
-error[E0277]: the trait bound `Foo: pin_init::__internal::HasPinData` is not satisfied
+error[E0277]: `Foo` cannot be used with `pin_init!` macro
  --> tests/ui/compile-fail/pinned_drop/no_pin_data_but_pinned_drop.rs:7:21
   |
 7 | impl PinnedDrop for Foo {
@@ -9,6 +9,7 @@ help: the trait `pin_init::__internal::HasPinData` is not implemented for `Foo`
   |
 4 | struct Foo {}
   | ^^^^^^^^^^
+  = note: did you forget to add `#[pin_data]` attribute to the struct?
 note: required by a bound in `PinnedDrop`
  --> src/lib.rs
   |

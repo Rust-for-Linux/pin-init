@@ -1,4 +1,4 @@
-error[E0277]: the trait bound `Foo: pin_init::__internal::HasPinData` is not satisfied
+error[E0277]: `Foo` cannot be used with `pin_init!` macro
  --> tests/ui/compile-fail/init/missing_pin_data.rs:9:19
   |
 9 |         pin_init!(Self { a: 42 })
@@ -9,4 +9,5 @@ help: the trait `pin_init::__internal::HasPinData` is not implemented for `Foo`
   |
 3 | struct Foo {
   | ^^^^^^^^^^
+  = note: did you forget to add `#[pin_data]` attribute to the struct?
   = note: this error originates in the macro `pin_init` (in Nightly builds, run with -Z macro-backtrace for more info)
