@@ -81,12 +81,12 @@ impl InitOk {
 ///
 /// # Safety
 ///
-/// Only the `init` module is allowed to use this trait.
+/// `pin-init` relies on the correctness of the helper functions defined on `PinData`.
+/// Thus, only the `#[pin_data]` can implement this trait.
 pub unsafe trait HasPinData {
     type PinData;
 
-    #[expect(clippy::missing_safety_doc)]
-    unsafe fn __pin_data() -> Self::PinData;
+    fn __pin_data() -> Self::PinData;
 }
 
 /// This trait is automatically implemented for every type. It aims to provide the same type
@@ -98,8 +98,7 @@ pub unsafe trait HasPinData {
 pub unsafe trait HasInitData {
     type InitData;
 
-    #[expect(clippy::missing_safety_doc)]
-    unsafe fn __init_data() -> Self::InitData;
+    fn __init_data() -> Self::InitData;
 }
 
 pub struct AllData<T: ?Sized>(PhantomInvariant<T>);
@@ -129,7 +128,7 @@ unsafe impl<T: ?Sized> HasInitData for T {
     type InitData = AllData<T>;
 
     #[inline]
-    unsafe fn __init_data() -> Self::InitData {
+    fn __init_data() -> Self::InitData {
         AllData(PhantomInvariant::new())
     }
 }

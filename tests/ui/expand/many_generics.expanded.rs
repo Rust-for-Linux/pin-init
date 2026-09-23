@@ -155,7 +155,7 @@ const _: () = {
     {
         type PinData = __ThePinData<'a, 'b, T, SIZE>;
         #[inline]
-        unsafe fn __pin_data() -> Self::PinData {
+        fn __pin_data() -> Self::PinData {
             __ThePinData {
                 __phantom: ::pin_init::__internal::PhantomInvariant::new(),
             }

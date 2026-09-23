@@ -109,7 +109,7 @@ const _: () = {
     for Foo<'a, T, N> {
         type PinData = __ThePinData<'a, T, N>;
         #[inline]
-        unsafe fn __pin_data() -> Self::PinData {
+        fn __pin_data() -> Self::PinData {
             __ThePinData {
                 __phantom: ::pin_init::__internal::PhantomInvariant::new(),
             }
@@ -142,7 +142,7 @@ const _: () = {
 fn main() {
     let mut first = [1u8, 2, 3];
     let _ = {
-        let data = unsafe {
+        let data = {
             use ::pin_init::__internal::HasInitData;
             Foo::__init_data()
         };
@@ -200,7 +200,7 @@ fn main() {
     };
     let mut second = [4u8, 5, 6];
     let _ = {
-        let data = unsafe {
+        let data = {
             use ::pin_init::__internal::HasInitData;
             Foo::__init_data()
         };
