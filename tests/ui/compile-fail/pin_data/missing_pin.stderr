@@ -1,4 +1,4 @@
-error[E0277]: the trait bound `impl PinInit<usize>: Init<usize, _>` is not satisfied
+error[E0277]: `impl PinInit<usize>` cannot be used to movably initialize `usize` with error `_`
   --> tests/ui/compile-fail/pin_data/missing_pin.rs:12:18
    |
 12 |             a <- a,
@@ -7,6 +7,7 @@ error[E0277]: the trait bound `impl PinInit<usize>: Init<usize, _>` is not satis
    |             |    the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
    |             required by a bound introduced by this call
    |
+   = note: if your type implements `PinInit` but not `Init`, you might be forgetting a `#[pin]` annotation on fields
 help: the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
       but trait `Init<impl PinInit<usize>, !>` is implemented for it
   --> src/lib.rs

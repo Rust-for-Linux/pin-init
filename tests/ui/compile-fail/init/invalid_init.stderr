@@ -1,4 +1,4 @@
-error[E0277]: the trait bound `impl pin_init::PinInit<Bar>: Init<Bar, _>` is not satisfied
+error[E0277]: `impl pin_init::PinInit<Bar>` cannot be used to movably initialize `Bar` with error `_`
   --> tests/ui/compile-fail/init/invalid_init.rs:19:16
    |
 19 |         bar <- Bar::new(),
@@ -7,6 +7,7 @@ error[E0277]: the trait bound `impl pin_init::PinInit<Bar>: Init<Bar, _>` is not
    |         |      the trait `Init<Bar, _>` is not implemented for `impl pin_init::PinInit<Bar>`
    |         required by a bound introduced by this call
    |
+   = note: if your type implements `PinInit` but not `Init`, you might be forgetting a `#[pin]` annotation on fields
 help: the following other types implement trait `Init<T, E>`
   --> src/lib.rs
    |
