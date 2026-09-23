@@ -226,6 +226,9 @@ jobs:
         env:
           RUSTFLAGS: "-Dwarnings"
           MIRIFLAGS: ${{matrix.MIRIFLAGS}}
+          # Workaround https://github.com/rust-lang/miri/issues/5341 until the fix is available from nightly.
+          UNSTABLE_RUSTDOC_TEST_PATH: src/lib.rs
+          UNSTABLE_RUSTDOC_TEST_LINE: 100
   sanitizers:
     runs-on: ubuntu-latest
     strategy:
@@ -430,14 +433,12 @@ jobs:
           path: "pin-init"
           fetch-depth: 0
           ref: ${{github.event.pull_request.head.sha}}
-      - run: |
-          pushd kernel
-          git config user.name "github-runner" && git config user.email "<>"
-          popd # kernel
-
-          pushd pin-init
-          git config user.name "github-runner" && git config user.email "<>"
-          git fetch
+      - name: Setup Git user
+        run: |
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+      - name: Apply patches on pin-init-next
+        run: |
           if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/next)" ]; then
               # when there are no new commits, we can succeed directly
               exit 0
@@ -449,6 +450,16 @@ jobs:
               fi
               false
           fi
+        working-directory: pin-init
+      - name: Run checkpatch.pl
+        run: |
+          if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/pin-init-next)" ]; then
+              # when there are no new commits, we can succeed directly
+              exit 0
+          fi
+          # Commit ID does not match between two trees, so ignore it.
+          scripts/checkpatch.pl --git origin/pin-init-next..HEAD --ignore UNKNOWN_COMMIT_ID
+        working-directory: kernel
 
   update:
     runs-on: ubuntu-latest
