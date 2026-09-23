@@ -109,7 +109,7 @@ const _: () = {
     for Foo<'a, T, N> {
         type PinData = __ThePinData<'a, T, N>;
         #[inline]
-        fn __pin_data() -> Self::PinData {
+        fn __pin_data(_: ::pin_init::__internal::InitData<Self>) -> Self::PinData {
             __ThePinData {
                 __phantom: ::pin_init::__internal::PhantomInvariant::new(),
             }

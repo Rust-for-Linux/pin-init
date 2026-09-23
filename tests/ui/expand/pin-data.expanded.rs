@@ -94,7 +94,7 @@ const _: () = {
     unsafe impl ::pin_init::__internal::HasPinData for Foo {
         type PinData = __ThePinData;
         #[inline]
-        fn __pin_data() -> Self::PinData {
+        fn __pin_data(_: ::pin_init::__internal::InitData<Self>) -> Self::PinData {
             __ThePinData {
                 __phantom: ::pin_init::__internal::PhantomInvariant::new(),
             }
