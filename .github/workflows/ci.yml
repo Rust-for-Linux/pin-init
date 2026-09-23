@@ -226,6 +226,9 @@ jobs:
         env:
           RUSTFLAGS: "-Dwarnings"
           MIRIFLAGS: ${{matrix.MIRIFLAGS}}
+          # Workaround https://github.com/rust-lang/miri/issues/5341 until the fix is available from nightly.
+          UNSTABLE_RUSTDOC_TEST_PATH: src/lib.rs
+          UNSTABLE_RUSTDOC_TEST_LINE: 100
   sanitizers:
     runs-on: ubuntu-latest
     strategy:
