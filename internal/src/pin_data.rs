@@ -8,7 +8,8 @@ use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
     visit_mut::VisitMut,
-    Field, Fields, Generics, Ident, Index, Item, Member, PathSegment, Type, TypePath, Visibility,
+    Field, Fields, Generics, Ident, Index, Item, ItemStruct, Member, PathSegment, Type, TypePath,
+    Visibility,
 };
 
 use crate::{
@@ -54,7 +55,7 @@ struct FieldInfo<'a> {
     pinned: bool,
 }
 
-pub(crate) fn pin_data(
+pub(crate) fn expand_with_cfg(
     args: Args,
     input: Item,
     dcx: &mut DiagCtxt,
@@ -120,6 +121,14 @@ pub(crate) fn pin_data(
         ));
     }
 
+    expand(args, struct_, dcx)
+}
+
+fn expand(
+    args: Args,
+    mut struct_: ItemStruct,
+    dcx: &mut DiagCtxt,
+) -> Result<TokenStream, ErrorGuaranteed> {
     // The generics might contain the `Self` type. Since this macro will define a new type with the
     // same generics and bounds, this poses a problem: `Self` will refer to the new type as opposed
     // to this struct definition. Therefore we have to replace `Self` with the concrete name.
