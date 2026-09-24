@@ -1,0 +1,101 @@
+error: `'non_exist` is not a field name
+ --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:5:25
+  |
+5 |     #[borrows(covariant 'non_exist)] // Borrows non-existent fields
+  |                         ^^^^^^^^^^
+
+error: `'non_exist` is neither a lifetime in generics nor a field name
+ --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:8:16
+  |
+8 |     implicit: &'non_exist u32,
+  |                ^^^^^^^^^^
+
+error: lifetime `'b` is mentioned more than once
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:10:39
+   |
+10 |     #[borrows(covariant 'b, invariant 'b)]
+   |                                       ^^
+
+error: `#[borrowed]` attribute specified more than once
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:20:5
+   |
+20 |     #[borrowed(foobar)]
+   |     ^^^^^^^^^^^^^^^^^^^
+
+error: expected parentheses: #[borrowed(...)]
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:19:7
+   |
+19 |     #[borrowed = "foobar"]
+   |       ^^^^^^^^
+
+error: `'a` appear in generics and would conflict with field lifetime
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:32:5
+   |
+32 |     a: u32,
+   |     ^
+
+error: expected lifetime
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:36:31
+   |
+36 | struct InvalidTuple(#[borrows(1)] u32, u32);
+   |                               ^
+
+error: field lifetimes cannot be used in bounds
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:39:26
+   |
+39 | struct InvalidBounds<'a: 'y>
+   |                          ^^
+
+error: field lifetimes cannot be used in bounds
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:41:9
+   |
+41 |     'a: 'x,
+   |         ^^
+
+error[E0261]: use of undeclared lifetime name `'non_exist`
+ --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:8:16
+  |
+8 |     implicit: &'non_exist u32,
+  |                ^^^^^^^^^^ undeclared lifetime
+  |
+help: consider introducing lifetime `'non_exist` here
+  |
+4 | struct InvalidAttr<'non_exist, 'a> {
+  |                    +++++++++++
+
+error[E0261]: use of undeclared lifetime name `'non_exist`
+ --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:8:16
+  |
+8 |     implicit: &'non_exist u32,
+  |                ^^^^^^^^^^ undeclared lifetime
+  |
+help: consider introducing lifetime `'non_exist` here
+  |
+8 |     implicit<'non_exist>: &'non_exist u32,
+  |             ++++++++++++
+help: consider introducing lifetime `'non_exist` here
+  |
+4 | struct InvalidAttr<'non_exist, 'a> {
+  |                    +++++++++++
+
+error[E0261]: use of undeclared lifetime name `'y`
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:39:26
+   |
+39 | struct InvalidBounds<'a: 'y>
+   |                          ^^ undeclared lifetime
+   |
+help: consider introducing lifetime `'y` here
+   |
+39 | struct InvalidBounds<'y, 'a: 'y>
+   |                      +++
+
+error[E0261]: use of undeclared lifetime name `'x`
+  --> tests/ui/compile-fail/pin_data/selfref_invalid_attr.rs:41:9
+   |
+41 |     'a: 'x,
+   |         ^^ undeclared lifetime
+   |
+help: consider introducing lifetime `'x` here
+   |
+39 | struct InvalidBounds<'x, 'a: 'y>
+   |                      +++
