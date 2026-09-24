@@ -22,7 +22,8 @@ mod zeroable;
 
 #[proc_macro_attribute]
 pub fn pin_data(args: TokenStream, input: TokenStream) -> TokenStream {
-    DiagCtxt::for_item(|dcx| pin_data::pin_data(syn::parse(args)?, syn::parse(input)?, dcx)).into()
+    DiagCtxt::for_item(|dcx| pin_data::expand_with_cfg(syn::parse(args)?, syn::parse(input)?, dcx))
+        .into()
 }
 
 #[proc_macro_attribute]
