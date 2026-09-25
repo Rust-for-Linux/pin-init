@@ -8,10 +8,10 @@ const _: () = {
     /// Pin-projections of [`Foo`]
     #[allow(dead_code, non_snake_case)]
     #[doc(hidden)]
-    struct __Projection<'__pin> {
-        array: &'__pin mut [u8; 1024 * 1024],
-        _pin: ::core::pin::Pin<&'__pin mut PhantomPinned>,
-        ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut ()>,
+    struct __Projection<'__this> {
+        array: &'__this mut [u8; 1024 * 1024],
+        _pin: ::core::pin::Pin<&'__this mut PhantomPinned>,
+        ___pin_phantom_data: ::core::marker::PhantomData<&'__this mut ()>,
     }
     impl Foo {
         /// Pin-projects all fields of `Self`.
@@ -22,9 +22,9 @@ const _: () = {
         /// These fields are **not** structurally pinned:
         /// - `array`
         #[inline]
-        fn project<'__pin>(
-            self: ::core::pin::Pin<&'__pin mut Self>,
-        ) -> __Projection<'__pin> {
+        fn project<'__this>(
+            self: ::core::pin::Pin<&'__this mut Self>,
+        ) -> __Projection<'__this> {
             let this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
             __Projection {
                 array: &mut this.array,
