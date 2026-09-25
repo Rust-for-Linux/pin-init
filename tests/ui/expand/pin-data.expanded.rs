@@ -101,15 +101,14 @@ const _: () = {
         }
     }
     #[allow(dead_code, non_snake_case)]
-    struct __Unpin<'__pin> {
-        __phantom_pin: ::pin_init::__internal::PhantomInvariantLifetime<'__pin>,
+    struct __Unpin {
         __phantom: ::pin_init::__internal::PhantomInvariant<Foo>,
         _pin: PhantomPinned,
     }
     #[doc(hidden)]
-    impl<'__pin> ::core::marker::Unpin for Foo
+    impl ::core::marker::Unpin for Foo
     where
-        __Unpin<'__pin>: ::core::marker::Unpin,
+        for<'__dummy> __Unpin: ::core::marker::Unpin,
     {}
     trait MustNotImplDrop {}
     impl<T: ::core::ops::Drop + ?::core::marker::Sized> MustNotImplDrop for T {}

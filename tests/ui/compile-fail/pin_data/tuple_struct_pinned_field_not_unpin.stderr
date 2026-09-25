@@ -2,11 +2,11 @@ error[E0277]: `PhantomPinned` cannot be unpinned
   --> tests/ui/compile-fail/pin_data/tuple_struct_pinned_field_not_unpin.rs:10:20
    |
 10 |     assert_unpin::<Tuple<usize>>();
-   |                    ^^^^^^^^^^^^ within `__Unpin<'_, usize>`, the trait `Unpin` is not implemented for `PhantomPinned`
+   |                    ^^^^^^^^^^^^ within `__Unpin<usize>`, the trait `Unpin` is not implemented for `PhantomPinned`
    |
    = note: consider using the `pin!` macro
            consider using `Box::pin` if you need to access the pinned value outside of the current scope
-note: required because it appears within the type `__Unpin<'_, usize>`
+note: required because it appears within the type `__Unpin<usize>`
   --> tests/ui/compile-fail/pin_data/tuple_struct_pinned_field_not_unpin.rs:4:1
    |
  4 | #[pin_data]
