@@ -2,7 +2,7 @@ use pin_init::*;
 struct Foo {}
 fn main() {
     let _ = {
-        let data = unsafe {
+        let data = {
             use ::pin_init::__internal::HasInitData;
             Foo::__init_data()
         };

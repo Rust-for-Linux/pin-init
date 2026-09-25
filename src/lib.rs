@@ -920,7 +920,8 @@ macro_rules! assert_pinned {
     ($ty:ty, $field:ident, $field_ty:ty, inline) => {
         // SAFETY: This code is unreachable.
         let _ = move |ptr: *mut $ty| unsafe {
-            let data = <$ty as $crate::__internal::HasPinData>::__pin_data();
+            let data = <$ty as $crate::__internal::HasInitData>::__init_data();
+            let data = $crate::__internal::HasPinData::__pin_data(data);
             _ = data
                 .$field(ptr)
                 .init($crate::__internal::AlwaysFail::<$field_ty>::new());
@@ -965,6 +966,9 @@ macro_rules! assert_pinned {
 #[cfg_attr(not(kernel), doc = "[`Arc<T>`]: alloc::alloc::sync::Arc")]
 #[cfg_attr(not(kernel), doc = "[`Box<T>`]: alloc::alloc::boxed::Box")]
 #[must_use = "An initializer must be used in order to create its value."]
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot be used to initialize `{T}` with error `{E}`"
+)]
 pub unsafe trait PinInit<T: ?Sized, E = Infallible>: Sized {
     /// Alias of [`PinInit::__init`].
     ///
@@ -1099,6 +1103,11 @@ where
 #[cfg_attr(not(kernel), doc = "[`Arc<T>`]: alloc::alloc::sync::Arc")]
 #[cfg_attr(not(kernel), doc = "[`Box<T>`]: alloc::alloc::boxed::Box")]
 #[must_use = "An initializer must be used in order to create its value."]
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot be used to movably initialize `{T}` with error `{E}`",
+    note = "if your type implements `PinInit` but not `Init`, \
+            you might be forgetting a `#[pin]` annotation on fields"
+)]
 pub unsafe trait Init<T: ?Sized, E = Infallible>: PinInit<T, E> {
     /// First initializes the value using `self` then calls the function `f` with the initialized
     /// value.

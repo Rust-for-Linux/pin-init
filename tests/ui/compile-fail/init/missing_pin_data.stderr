@@ -1,13 +1,13 @@
-error[E0599]: no associated function or constant named `__pin_data` found for struct `Foo` in the current scope
- --> tests/ui/compile-fail/init/missing_pin_data.rs:9:9
+error[E0277]: `Foo` cannot be used with `pin_init!` macro
+ --> tests/ui/compile-fail/init/missing_pin_data.rs:9:19
+  |
+9 |         pin_init!(Self { a: 42 })
+  |                   ^^^^ unsatisfied trait bound
+  |
+help: the trait `pin_init::__internal::HasPinData` is not implemented for `Foo`
+ --> tests/ui/compile-fail/init/missing_pin_data.rs:3:1
   |
 3 | struct Foo {
-  | ---------- associated function or constant `__pin_data` not found for this struct
-...
-9 |         pin_init!(Self { a: 42 })
-  |         ^^^^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `Foo`
-  |
-  = help: items from traits can only be used if the trait is implemented and in scope
-  = note: the following trait defines an item `__pin_data`, perhaps you need to implement it:
-          candidate #1: `pin_init::__internal::HasPinData`
+  | ^^^^^^^^^^
+  = note: did you forget to add `#[pin_data]` attribute to the struct?
   = note: this error originates in the macro `pin_init` (in Nightly builds, run with -Z macro-backtrace for more info)
