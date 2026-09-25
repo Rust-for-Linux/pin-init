@@ -1,7 +1,7 @@
 error[E0277]: `?` couldn't convert the error to `std::alloc::AllocError`
-  --> tests/ui/compile-fail/init/no_error_coercion.rs:18:15
+  --> tests/ui/compile-fail/init/no_error_coercion.rs:17:15
    |
-18 |             bar <- init!(Bar { b: 42 }),
+17 |             bar <- init!(Bar { b: 42 }),
    |             --^------------------------
    |             | |
    |             | the trait `From<!>` is not implemented for `std::alloc::AllocError`

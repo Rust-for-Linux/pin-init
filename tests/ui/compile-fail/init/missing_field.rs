@@ -1,4 +1,3 @@
-#![feature(allocator_api)]
 use pin_init::*;
 
 #[pin_data]
