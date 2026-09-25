@@ -17,7 +17,7 @@ const _: () = {
     #[allow(dead_code, non_snake_case)]
     #[doc(hidden)]
     struct __Projection<
-        '__pin,
+        '__this,
         'a,
         'b: 'a,
         T: Bar<'b> + ?Sized + 'a,
@@ -26,10 +26,10 @@ const _: () = {
     where
         T: Bar<'a, 1>,
     {
-        array: &'__pin mut [u8; 1024 * 1024],
-        r: &'__pin mut &'b mut [&'a mut T; SIZE],
-        _pin: ::core::pin::Pin<&'__pin mut PhantomPinned>,
-        ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut ()>,
+        array: &'__this mut [u8; 1024 * 1024],
+        r: &'__this mut &'b mut [&'a mut T; SIZE],
+        _pin: ::core::pin::Pin<&'__this mut PhantomPinned>,
+        ___pin_phantom_data: ::core::marker::PhantomData<&'__this mut ()>,
     }
     impl<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize> Foo<'a, 'b, T, SIZE>
     where
@@ -44,9 +44,9 @@ const _: () = {
         /// - `array`
         /// - `r`
         #[inline]
-        fn project<'__pin>(
-            self: ::core::pin::Pin<&'__pin mut Self>,
-        ) -> __Projection<'__pin, 'a, 'b, T, SIZE> {
+        fn project<'__this>(
+            self: ::core::pin::Pin<&'__this mut Self>,
+        ) -> __Projection<'__this, 'a, 'b, T, SIZE> {
             let this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
             __Projection {
                 array: &mut this.array,
