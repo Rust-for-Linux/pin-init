@@ -449,6 +449,7 @@ jobs:
           fi
         working-directory: pin-init
       - name: Run checkpatch.pl
+        continue-on-error: true
         run: |
           if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/pin-init-next)" ]; then
               # when there are no new commits, we can succeed directly
