@@ -1,8 +1,8 @@
 error[E0793]: reference to field of packed struct is unaligned
-  --> tests/ui/compile-fail/init/packed_struct.rs:11:13
+  --> tests/ui/compile-fail/init/packed_struct.rs:11:33
    |
 11 |     let _ = init!(Foo { a: -42, b: 42 });
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                                 ^
    |
    = note: this struct is 1-byte aligned, but the type of this field may require higher alignment
    = note: creating a misaligned reference is undefined behavior (even if that reference is never dereferenced)
@@ -10,14 +10,10 @@ error[E0793]: reference to field of packed struct is unaligned
    = note: this error originates in the macro `init` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0793]: reference to field of packed struct is unaligned
-  --> tests/ui/compile-fail/init/packed_struct.rs:12:13
+  --> tests/ui/compile-fail/init/packed_struct.rs:13:9
    |
-12 |       let _ = init!(Foo {
-   |  _____________^
-13 | |         b: 42,
-14 | |         ..Zeroable::init_zeroed()
-15 | |     });
-   | |______^
+13 |         b: 42,
+   |         ^
    |
    = note: this struct is 1-byte aligned, but the type of this field may require higher alignment
    = note: creating a misaligned reference is undefined behavior (even if that reference is never dereferenced)
