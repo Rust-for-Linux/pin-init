@@ -1,0 +1,18 @@
+error: field `ptr` borrows `b`, but drops later
+ --> tests/ui/compile-fail/pin_data/selfref_dropck.rs:6:11
+  |
+6 |     ptr: &'b u32,
+  |           ^^
+
+error: lifetime may not live long enough
+  --> tests/ui/compile-fail/pin_data/selfref_dropck.rs:20:10
+   |
+20 |     ptr: &'b &'a (),
+   |          ^^^^^^^^^^ requires that `'a` must outlive `'b`
+21 |     a: String,
+   |     - lifetime `'a` defined here
+22 |     cannot_refer_a: PrintOnDrop<'b>,
+23 |     b: String,
+   |     - lifetime `'b` defined here
+   |
+   = help: consider adding the following bound: `'a: 'b`

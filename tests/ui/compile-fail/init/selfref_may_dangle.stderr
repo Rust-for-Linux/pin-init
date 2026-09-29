@@ -1,0 +1,16 @@
+error[E0505]: cannot move out of `str` because it is borrowed
+  --> tests/ui/compile-fail/init/selfref_may_dangle.rs:29:10
+   |
+27 |     let str = "hello world".to_owned();
+   |         --- binding `str` declared here
+28 |     let _selfref = Box::pin_init(new(&str)).unwrap();
+   |                                      ---- borrow of `str` occurs here
+29 |     drop(str);
+   |          ^^^ move out of `str` occurs here
+30 | }
+   | - borrow might be used here, when `_selfref` is dropped and runs the destructor for type `Pin<Box<SelfRef<'_>>>`
+   |
+help: consider cloning the value if the performance cost is acceptable
+   |
+28 |     let _selfref = Box::pin_init(new(&str.clone())).unwrap();
+   |                                          ++++++++
