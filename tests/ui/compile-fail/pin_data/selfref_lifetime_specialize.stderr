@@ -1,0 +1,67 @@
+error: lifetime may not live long enough
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:24:15
+   |
+22 | #[pin_data]
+   | ----------- in this attribute macro expansion
+23 | struct Bar {
+24 |     lt_spec2: LtSpec2<'a, 'b>,
+   |               ^^^^^^^^^^^^^^^ requires that `'b` must outlive `'a`
+25 |     a: u32,
+   |     - lifetime `'a` defined here
+26 |     b: u32,
+   |     - lifetime `'b` defined here
+   |
+   = help: consider adding the following bound: `'b: 'a`
+   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: higher-ranked lifetime error
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:34:5
+   |
+34 |     assert_send::<Foo>();
+   |     ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: could not prove `Foo: Send`
+
+error: higher-ranked lifetime error
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:35:5
+   |
+35 |     assert_sync::<Foo>();
+   |     ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: could not prove `Foo: Sync`
+
+error: lifetime bound not satisfied
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:36:5
+   |
+36 |     assert_send::<Bar>();
+   |     ^^^^^^^^^^^^^^^^^^^^
+   |
+note: the lifetime `'a` defined here...
+  --> src/__internal.rs
+   |
+   |     for<'a> Erase<<F as FnOutput<(&'a (),)>>::Output>: Send,
+   |         ^^
+note: ...must outlive the lifetime `'a` defined here
+  --> src/__internal.rs
+   |
+   |     for<'a> Erase<<F as FnOutput<(&'a (),)>>::Output>: Send,
+   |         ^^
+   = note: this is a known limitation that will be removed in the future (see issue #100013 <https://github.com/rust-lang/rust/issues/100013> for more information)
+
+error: lifetime bound not satisfied
+  --> tests/ui/compile-fail/pin_data/selfref_lifetime_specialize.rs:37:5
+   |
+37 |     assert_sync::<Bar>();
+   |     ^^^^^^^^^^^^^^^^^^^^
+   |
+note: the lifetime `'a` defined here...
+  --> src/__internal.rs
+   |
+   |     for<'a> Erase<<F as FnOutput<(&'a (),)>>::Output>: Sync,
+   |         ^^
+note: ...must outlive the lifetime `'a` defined here
+  --> src/__internal.rs
+   |
+   |     for<'a> Erase<<F as FnOutput<(&'a (),)>>::Output>: Sync,
+   |         ^^
+   = note: this is a known limitation that will be removed in the future (see issue #100013 <https://github.com/rust-lang/rust/issues/100013> for more information)
