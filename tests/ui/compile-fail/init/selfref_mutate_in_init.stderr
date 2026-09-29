@@ -1,0 +1,16 @@
+error[E0505]: cannot move out of value because it is borrowed
+  --> tests/ui/compile-fail/init/selfref_mutate_in_init.rs:23:5
+   |
+23 | /     pin_init!(Direct {
+24 | |         part: Mutex::new(PrintOnDrop("")),
+25 | |         early: "hello world".to_owned(),
+26 | |         _: {
+...  |
+31 | |         },
+32 | |     }? ())
+   | |          ^
+   | |          |
+   | |__________move out of value occurs here
+   |            borrow of value occurs here
+   |
+   = note: this error originates in the macro `pin_init` (in Nightly builds, run with -Z macro-backtrace for more info)

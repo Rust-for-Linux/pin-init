@@ -1,11 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use proc_macro2::{Ident, TokenStream};
-use quote::format_ident;
-use syn::{Attribute, Index, Member};
+use quote::{format_ident, ToTokens};
+use syn::{
+    parse_quote, visit::Visit, visit_mut::VisitMut, Attribute, BoundLifetimes, GenericParam,
+    Generics, Index, Lifetime, Member, Token, Type,
+};
+
+use crate::DiagCtxt;
 
 pub(crate) trait AttrListExt {
     fn extract_cfg_attrs(&mut self) -> Vec<TokenStream>;
+
+    /// Extract attribute with identifier `path`.
+    ///
+    /// Report error if the attribute appears multiple times.
+    fn extract_single_attr(&mut self, dcx: &DiagCtxt, path: &str) -> Option<Attribute>;
 }
 
 impl AttrListExt for Vec<Attribute> {
@@ -24,6 +36,24 @@ impl AttrListExt for Vec<Attribute> {
         }
 
         cfg
+    }
+
+    fn extract_single_attr(&mut self, dcx: &DiagCtxt, path: &str) -> Option<Attribute> {
+        // FIXME: Replace with `extract_if` when MSRV >= 1.85.
+        let attr_pos = self.iter().position(|attr| attr.path().is_ident(path))?;
+        let attr = self.remove(attr_pos);
+        self.retain(|attr| {
+            if !attr.path().is_ident(path) {
+                return true;
+            }
+
+            dcx.error(
+                attr,
+                format!("`#[{path}]` attribute specified more than once"),
+            );
+            false
+        });
+        Some(attr)
     }
 }
 
@@ -50,5 +80,381 @@ impl MemberExt for Member {
             Member::Named(ident) => format!("`{ident}`"),
             Member::Unnamed(Index { index, .. }) => format!("index `{index}`"),
         }
+    }
+}
+
+pub(crate) struct CombinedGenerics<'a>(pub(crate) Vec<&'a Generics>);
+pub(crate) struct CombinedImplGenerics<'a>(&'a CombinedGenerics<'a>);
+pub(crate) struct CombinedTypeGenerics<'a>(&'a CombinedGenerics<'a>);
+
+impl CombinedGenerics<'_> {
+    pub(crate) fn split_for_impl(
+        &self,
+    ) -> (
+        CombinedImplGenerics<'_>,
+        CombinedTypeGenerics<'_>,
+        // A stub type so `split_for_impl` signature matches that of `syn`'s.
+        impl Sized,
+    ) {
+        (CombinedImplGenerics(self), CombinedTypeGenerics(self), ())
+    }
+}
+
+impl ToTokens for CombinedGenerics<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        // Most of the time we are only adding lifetimes, so we prefer to place the user provided generics last.
+        self.0
+            .last()
+            .and_then(|x| x.lt_token)
+            .unwrap_or_default()
+            .to_tokens(tokens);
+
+        let comma: Token![,] = Default::default();
+
+        // Output lifetimes first.
+        for generics in self.0.iter() {
+            for param in generics.params.pairs() {
+                if let GenericParam::Lifetime(lt) = param.value() {
+                    lt.to_tokens(tokens);
+                    param.punct().unwrap_or(&&comma).to_tokens(tokens);
+                }
+            }
+        }
+
+        for generics in self.0.iter() {
+            for param in generics.params.pairs() {
+                if let GenericParam::Lifetime(_) = param.value() {
+                    continue;
+                };
+                param.value().to_tokens(tokens);
+                param.punct().unwrap_or(&&comma).to_tokens(tokens);
+            }
+        }
+
+        self.0
+            .last()
+            .and_then(|x| x.gt_token)
+            .unwrap_or_default()
+            .to_tokens(tokens);
+    }
+}
+
+impl ToTokens for CombinedImplGenerics<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.0
+             .0
+            .last()
+            .and_then(|x| x.lt_token)
+            .unwrap_or_default()
+            .to_tokens(tokens);
+
+        let comma: Token![,] = Default::default();
+
+        // Output lifetimes first.
+        for generics in self.0 .0.iter() {
+            for param in generics.params.pairs() {
+                if let GenericParam::Lifetime(lt) = param.value() {
+                    lt.to_tokens(tokens);
+                    param.punct().unwrap_or(&&comma).to_tokens(tokens);
+                }
+            }
+        }
+
+        for generics in self.0 .0.iter() {
+            for param in generics.params.pairs() {
+                // Leave out defaults.
+                match param.value() {
+                    GenericParam::Lifetime(_) => continue,
+                    GenericParam::Type(param) => {
+                        param.ident.to_tokens(tokens);
+                        if !param.bounds.is_empty() {
+                            param
+                                .colon_token
+                                .unwrap_or_else(Default::default)
+                                .to_tokens(tokens);
+                            param.bounds.to_tokens(tokens);
+                        }
+                    }
+                    GenericParam::Const(param) => {
+                        param.const_token.to_tokens(tokens);
+                        param.ident.to_tokens(tokens);
+                        param.colon_token.to_tokens(tokens);
+                        param.ty.to_tokens(tokens);
+                    }
+                }
+                param.punct().unwrap_or(&&comma).to_tokens(tokens);
+            }
+        }
+
+        self.0
+             .0
+            .last()
+            .and_then(|x| x.gt_token)
+            .unwrap_or_default()
+            .to_tokens(tokens);
+    }
+}
+
+impl ToTokens for CombinedTypeGenerics<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.0
+             .0
+            .last()
+            .and_then(|x| x.lt_token)
+            .unwrap_or_default()
+            .to_tokens(tokens);
+
+        let comma: Token![,] = Default::default();
+
+        // Output lifetimes first.
+        for generics in self.0 .0.iter() {
+            for param in generics.params.pairs() {
+                if let GenericParam::Lifetime(lt) = param.value() {
+                    // Leave out bounds
+                    lt.lifetime.to_tokens(tokens);
+                    param.punct().unwrap_or(&&comma).to_tokens(tokens);
+                }
+            }
+        }
+
+        for generics in self.0 .0.iter() {
+            for param in generics.params.pairs() {
+                // Leave out bounds and defaults.
+                match param.value() {
+                    GenericParam::Lifetime(_) => continue,
+                    GenericParam::Type(param) => {
+                        param.ident.to_tokens(tokens);
+                    }
+                    GenericParam::Const(param) => {
+                        param.ident.to_tokens(tokens);
+                    }
+                }
+                param.punct().unwrap_or(&&comma).to_tokens(tokens);
+            }
+        }
+
+        self.0
+             .0
+            .last()
+            .and_then(|x| x.gt_token)
+            .unwrap_or_default()
+            .to_tokens(tokens);
+    }
+}
+
+pub(crate) trait LifetimeExt {
+    /// Get a visitor that call the provided function for all unbound lifetimes.
+    fn visitor<'a>(f: impl FnMut(&'a Lifetime)) -> impl Visit<'a>;
+
+    /// Obtain a lifetime from a identifier.
+    ///
+    /// The created lifetime has the same span.
+    fn from_ident(ident: &Ident) -> Self;
+}
+
+impl LifetimeExt for Lifetime {
+    fn visitor<'a>(f: impl FnMut(&'a Lifetime)) -> impl Visit<'a> {
+        LifetimeVisitor {
+            bound: BTreeSet::new(),
+            visit: f,
+        }
+    }
+
+    fn from_ident(ident: &Ident) -> Self {
+        Lifetime {
+            apostrophe: ident.span(),
+            ident: ident.clone(),
+        }
+    }
+}
+
+struct LifetimeVisitor<'a, F> {
+    bound: BTreeSet<&'a Lifetime>,
+    visit: F,
+}
+
+impl<'a, F> LifetimeVisitor<'a, F> {
+    fn with_bound_lifetimes(
+        &mut self,
+        bound: Option<&'a BoundLifetimes>,
+        f: impl FnOnce(&mut Self),
+    ) {
+        // In case the type includes a lifetime binder, e.g. `dyn for<'a> Foo`,
+        // the lifetimes in the binder are bound and should not be visited.
+
+        let mut to_remove = Vec::new();
+        if let Some(bound) = bound {
+            for lt in &bound.lifetimes {
+                let GenericParam::Lifetime(lt) = lt else {
+                    continue;
+                };
+                if !self.bound.contains(&&lt.lifetime) {
+                    to_remove.push(&lt.lifetime);
+                }
+            }
+        }
+
+        f(self);
+
+        for lt in to_remove {
+            self.bound.remove(lt);
+        }
+    }
+}
+
+impl<'a, F: FnMut(&'a Lifetime)> Visit<'a> for LifetimeVisitor<'a, F> {
+    fn visit_lifetime(&mut self, lt: &'a Lifetime) {
+        if lt.ident == "static" {
+            return;
+        }
+
+        if !self.bound.contains(lt) {
+            (self.visit)(lt);
+        }
+    }
+
+    fn visit_trait_bound(&mut self, bound: &'a syn::TraitBound) {
+        self.with_bound_lifetimes(bound.lifetimes.as_ref(), |this| {
+            this.visit_path(&bound.path)
+        });
+    }
+
+    fn visit_type_bare_fn(&mut self, bare_fn: &'a syn::TypeBareFn) {
+        self.with_bound_lifetimes(bare_fn.lifetimes.as_ref(), |this| {
+            for input in bare_fn.inputs.iter() {
+                this.visit_bare_fn_arg(input);
+            }
+            this.visit_return_type(&bare_fn.output);
+        });
+    }
+}
+
+pub(crate) struct ForGenerics<'a>(&'a Generics);
+
+pub(crate) trait GenericsExt {
+    fn for_generics(&self) -> ForGenerics<'_>;
+}
+
+impl GenericsExt for Generics {
+    fn for_generics(&self) -> ForGenerics<'_> {
+        ForGenerics(self)
+    }
+}
+
+impl ToTokens for ForGenerics<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        if self.0.params.is_empty() {
+            return;
+        }
+
+        <Token![for]>::default().to_tokens(tokens);
+        self.0.split_for_impl().1.to_tokens(tokens);
+    }
+}
+
+pub(crate) trait TypeExt {
+    /// Check if the type includes macro invocations.
+    ///
+    /// Proc-macros cannot expand macros and peek into them, so if macro is involved sometimes special handling is required.
+    fn has_macro(&self) -> bool;
+
+    fn replace_lifetimes(&self, needle: &[&Lifetime], replacement: &[&Lifetime]) -> Type;
+}
+
+impl TypeExt for Type {
+    fn has_macro(&self) -> bool {
+        struct HasMacro(bool);
+
+        impl<'ast> Visit<'ast> for HasMacro {
+            fn visit_macro(&mut self, _: &'ast syn::Macro) {
+                self.0 = true;
+            }
+        }
+
+        let mut visitor = HasMacro(false);
+        visitor.visit_type(self);
+        visitor.0
+    }
+
+    fn replace_lifetimes(&self, needle: &[&Lifetime], replacement: &[&Lifetime]) -> Type {
+        if needle.is_empty() {
+            return self.clone();
+        }
+
+        // If the type has macro, we cannot peek into it. Use some different approach to replace
+        // the type using GAT.
+        if self.has_macro() {
+            return parse_quote!(
+                <for<#(#needle,)*> fn(#(&#needle (),)*) -> #self as ::pin_init::__internal::FnOutput<(#(&#replacement (),)*)>>::Output
+            );
+        }
+
+        struct LifetimeReplacer<'a> {
+            to_replace: BTreeMap<&'a Lifetime, &'a Lifetime>,
+        }
+
+        impl<'a> LifetimeReplacer<'a> {
+            fn with_bound_lifetimes(
+                &mut self,
+                bound: Option<&BoundLifetimes>,
+                f: impl FnOnce(&mut Self),
+            ) {
+                // In case the type includes a lifetime binder, e.g. `dyn for<'a> Foo`,
+                // temporarily remove them from to_replace if they're.
+
+                let mut removed = Vec::new();
+                if let Some(bound) = bound {
+                    for lt in &bound.lifetimes {
+                        let GenericParam::Lifetime(lt) = lt else {
+                            continue;
+                        };
+                        if let Some(entry) = self.to_replace.remove_entry(&lt.lifetime) {
+                            removed.push(entry);
+                        }
+                    }
+                }
+
+                f(self);
+
+                for (key, val) in removed {
+                    self.to_replace.insert(key, val);
+                }
+            }
+        }
+
+        impl VisitMut for LifetimeReplacer<'_> {
+            fn visit_lifetime_mut(&mut self, lt: &mut syn::Lifetime) {
+                if let Some(&replacement) = self.to_replace.get(lt) {
+                    *lt = replacement.clone();
+                }
+            }
+
+            fn visit_trait_bound_mut(&mut self, bound: &mut syn::TraitBound) {
+                self.with_bound_lifetimes(bound.lifetimes.as_ref(), |this| {
+                    this.visit_path_mut(&mut bound.path)
+                });
+            }
+
+            fn visit_type_bare_fn_mut(&mut self, bare_fn: &mut syn::TypeBareFn) {
+                self.with_bound_lifetimes(bare_fn.lifetimes.as_ref(), |this| {
+                    for input in bare_fn.inputs.iter_mut() {
+                        this.visit_bare_fn_arg_mut(input);
+                    }
+
+                    this.visit_return_type_mut(&mut bare_fn.output);
+                });
+            }
+        }
+
+        let mut ret = self.clone();
+        LifetimeReplacer {
+            to_replace: needle
+                .iter()
+                .copied()
+                .zip(replacement.iter().copied())
+                .collect(),
+        }
+        .visit_type_mut(&mut ret);
+        ret
     }
 }

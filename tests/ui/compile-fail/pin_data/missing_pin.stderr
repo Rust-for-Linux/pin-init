@@ -2,10 +2,9 @@ error[E0277]: `impl PinInit<usize>` cannot be used to movably initialize `usize`
   --> tests/ui/compile-fail/pin_data/missing_pin.rs:12:18
    |
 12 |             a <- a,
-   |             -----^
-   |             |    |
-   |             |    the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
-   |             required by a bound introduced by this call
+   |               -- ^ the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`
+   |               |
+   |               required by a bound introduced by this call
    |
    = note: if your type implements `PinInit` but not `Init`, you might be forgetting a `#[pin]` annotation on fields
 help: the trait `Init<usize, _>` is not implemented for `impl PinInit<usize>`

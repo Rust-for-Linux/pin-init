@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens};
+use std::collections::{BTreeMap, BTreeSet};
+
+use proc_macro2::{Span, TokenStream};
+use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
-    parse::{End, Nothing, Parse},
+    parse::{End, Nothing, Parse, ParseStream},
     parse_quote, parse_quote_spanned,
     punctuated::Punctuated,
     spanned::Spanned,
+    visit::Visit,
     visit_mut::VisitMut,
-    Field, Fields, Generics, Ident, Index, Item, Member, PathSegment, Type, TypePath, Visibility,
+    Attribute, Field, Fields, GenericArgument, GenericParam, Generics, Ident, Index, Item,
+    ItemStruct, Lifetime, LifetimeParam, Member, Meta, PathArguments, PathSegment, Token, Type,
+    TypeParamBound, TypePath, WhereClause, WherePredicate,
 };
 
 use crate::{
@@ -17,6 +22,9 @@ use crate::{
 };
 
 pub(crate) mod kw {
+    syn::custom_keyword!(covariant);
+    syn::custom_keyword!(invariant);
+    syn::custom_keyword!(contravariant);
     syn::custom_keyword!(PinnedDrop);
 }
 
@@ -48,13 +56,197 @@ impl ToTokens for Args {
     }
 }
 
-struct FieldInfo<'a> {
-    field: &'a Field,
-    member: Member,
-    pinned: bool,
+/// Description of how a field is borrowed.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum BorrowedKind {
+    /// `#[borrowed]`, or implicitly inferreed.
+    #[default]
+    Shared,
+    // `#[borrowed(mut)]`.
+    Mutable,
 }
 
-pub(crate) fn pin_data(
+impl BorrowedKind {
+    fn parse(dcx: &mut DiagCtxt, attrs: &mut Vec<Attribute>) -> Option<Self> {
+        let attr = attrs.extract_single_attr(dcx, "borrowed")?;
+
+        Some(if let Meta::Path(_) = attr.meta {
+            BorrowedKind::Shared
+        } else {
+            match attr.parse_args_with(|input: ParseStream<'_>| {
+                let _: Token![mut] = input.parse()?;
+                Ok(BorrowedKind::Mutable)
+            }) {
+                Ok(v) => v,
+                Err(err) => {
+                    // Swallow the error and recover by inferring shared.
+                    dcx.error(attr.path(), err);
+                    BorrowedKind::Shared
+                }
+            }
+        })
+    }
+}
+
+/// Information about a borrowed field.
+struct BorrowedInfo {
+    kind: BorrowedKind,
+    /// Field lifetime for this field.
+    lifetime: Lifetime,
+    // Variance of the field lifetime, as captured by other fields.
+    lt_variance: Variance,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum Variance {
+    /// `covariant` annotation, or implicitly inferred.
+    #[default]
+    Covariant,
+    // `invariant` annotation.
+    Invariant,
+}
+
+impl Parse for Variance {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        Ok(if input.peek(kw::covariant) {
+            let _: kw::covariant = input.parse()?;
+            Variance::Covariant
+        } else if input.peek(kw::invariant) {
+            let _: kw::invariant = input.parse()?;
+            Variance::Invariant
+        } else if input.peek(kw::contravariant) {
+            // Field lifetimes are inherently covariant, so combining with contravariance,
+            // we would constrain it to be invariant.
+            let token: kw::contravariant = input.parse()?;
+            DiagCtxt::current(|dcx| {
+                dcx.error(
+                    token,
+                    "field lifetimes cannot be `contravariant`; use `invariant` instead",
+                )
+            });
+            Variance::Invariant
+        } else {
+            // Infer covariance if not specified.
+            Variance::Covariant
+        })
+    }
+}
+
+/// Information about field lifetimes captured in a type.
+struct Capture {
+    variance: Variance,
+    /// Lifetime to be captured.
+    lifetime: Lifetime,
+}
+
+impl std::borrow::Borrow<Lifetime> for Capture {
+    fn borrow(&self) -> &Lifetime {
+        &self.lifetime
+    }
+}
+
+impl PartialEq for Capture {
+    fn eq(&self, other: &Self) -> bool {
+        self.lifetime == other.lifetime
+    }
+}
+
+impl Eq for Capture {}
+
+impl PartialOrd for Capture {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Capture {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.lifetime.cmp(&other.lifetime)
+    }
+}
+
+impl Parse for Capture {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        Ok(Capture {
+            variance: input.parse()?,
+            lifetime: input.parse()?,
+        })
+    }
+}
+
+impl Capture {
+    fn parse_list(
+        dcx: &mut DiagCtxt,
+        attrs: &mut Vec<Attribute>,
+        bound_lifetimes: &BTreeSet<&Lifetime>,
+        exist_lifetimes: &BTreeSet<&Lifetime>,
+        field_idx_map: &BTreeMap<Ident, usize>,
+    ) -> Option<(BTreeSet<Capture>, Variance)> {
+        let attr = attrs.extract_single_attr(dcx, "borrows")?;
+        let punctuated: Punctuated<Capture, Token![,]> = attr
+            .parse_args_with(Punctuated::parse_terminated)
+            .map_err(ErrorGuaranteed::from)
+            .ok()?;
+
+        // Check for misuses inside attribute.
+        let mut set = BTreeSet::new();
+        for borrow in punctuated {
+            let lt = &borrow.lifetime;
+            if set.contains(&borrow) {
+                dcx.error(lt, format!("lifetime `{lt}` is mentioned more than once"));
+                continue;
+            }
+
+            if bound_lifetimes.contains(lt) {
+                dcx.error(
+                    lt,
+                    format!("`{lt}` is a struct generics and cannot be used in `#[borrows]`"),
+                );
+                continue;
+            }
+
+            if lt.ident != "_"
+                && !exist_lifetimes.contains(lt)
+                && !field_idx_map.contains_key(&lt.ident)
+            {
+                dcx.error(lt, format!("`{lt}` is not a field name"));
+                continue;
+            }
+
+            set.insert(borrow);
+        }
+
+        let wildcard = Lifetime::new("'_", Span::mixed_site());
+        let wildcard_variance = set.take(&wildcard).map(|b| b.variance).unwrap_or_default();
+        Some((set, wildcard_variance))
+    }
+}
+
+struct FieldInfo {
+    field: Field,
+    member: Member,
+    pinned: bool,
+    borrowed: Option<BorrowedInfo>,
+    captures: BTreeSet<Capture>,
+}
+
+struct StructInfo {
+    args: Args,
+    struct_: ItemStruct,
+    fields: Vec<FieldInfo>,
+    field_idx_map: BTreeMap<Ident, usize>,
+    is_tuple_struct: bool,
+    self_referential: bool,
+    /// Field lifetime genercis with outlive chain.
+    field_lt_outlive_chain: Generics,
+    /// Field lifetime genercis with outlive chain, with one chain for covariant fields and one
+    /// chain for invariant fields.
+    field_lt_split_variance_outlive_chain: Generics,
+    /// Existential lifetime with their outlives bounds.
+    exist_lt: Generics,
+}
+
+pub(crate) fn expand_with_cfg(
     args: Args,
     input: Item,
     dcx: &mut DiagCtxt,
@@ -120,6 +312,14 @@ pub(crate) fn pin_data(
         ));
     }
 
+    expand(args, struct_, dcx)
+}
+
+fn expand(
+    args: Args,
+    mut struct_: ItemStruct,
+    dcx: &mut DiagCtxt,
+) -> Result<TokenStream, ErrorGuaranteed> {
     // The generics might contain the `Self` type. Since this macro will define a new type with the
     // same generics and bounds, this poses a problem: `Self` will refer to the new type as opposed
     // to this struct definition. Therefore we have to replace `Self` with the concrete name.
@@ -132,17 +332,36 @@ pub(crate) fn pin_data(
     replacer.visit_fields_mut(&mut struct_.fields);
 
     let is_tuple_struct = matches!(struct_.fields, Fields::Unnamed(_));
-    let fields: Vec<FieldInfo<'_>> = struct_
+
+    let exist_lifetimes;
+    if let Some(whr) = &mut struct_.generics.where_clause {
+        exist_lifetimes = parse_existential_lifetimes(dcx, whr);
+    } else {
+        exist_lifetimes = Vec::new();
+    }
+    let all_exist_lifetimes: BTreeSet<&Lifetime> =
+        exist_lifetimes.iter().map(|f| &f.lifetime).collect();
+
+    // Collect all bound lifetimes from generics.
+    let bound_lifetimes: BTreeSet<&Lifetime> =
+        struct_.generics.lifetimes().map(|x| &x.lifetime).collect();
+    // Collect all fields.
+    let field_idx_map: BTreeMap<Ident, usize> = struct_
         .fields
-        .iter_mut()
+        .iter()
         .enumerate()
-        .map(|(index, field)| {
-            let len = field.attrs.len();
-            field.attrs.retain(|a| !a.path().is_ident("pin"));
-            let pinned_count = len - field.attrs.len();
-            if pinned_count > 1 {
-                dcx.error(&field, "#[pin] attribute specified more than once");
-            }
+        .filter_map(|(index, field)| Some((field.ident.clone()?, index)))
+        .collect();
+
+    // Keep track on fields being implicitly borrowed by being mentioned.
+    let mut implicitly_borrowed = BTreeSet::new();
+
+    let mut fields: Vec<FieldInfo> = struct_
+        .fields
+        .into_iter()
+        .enumerate()
+        .map(|(index, mut field)| {
+            let pinned = field.attrs.extract_single_attr(dcx, "pin").is_some();
 
             assert!(
                 !field.attrs.iter().any(|a| a.path().is_ident("cfg")),
@@ -156,18 +375,300 @@ pub(crate) fn pin_data(
                 }),
             };
 
+            // Parse `#[borrows]` attribute.
+            let (mut captures, wildcard_variance) = Capture::parse_list(
+                dcx,
+                &mut field.attrs,
+                &bound_lifetimes,
+                &all_exist_lifetimes,
+                &field_idx_map,
+            )
+            .unwrap_or_default();
+
+            // Infer lifetime based on the field referenced.
+            // Bound lifetimes from struct generics take priority.
+            //
+            // For example,
+            // ```
+            // struct Foo<'a> {
+            //     bar: &'a (),
+            //     a: u32,
+            // }
+            // ```
+            // would not be inferred as self-referential because `'a` is already bound by the
+            // struct generics.
+            Lifetime::visitor(|lt| {
+                if bound_lifetimes.contains(lt)
+                    || captures.contains(lt)
+                {
+                    return;
+                }
+
+                if !all_exist_lifetimes.contains(lt) && !field_idx_map.contains_key(&lt.ident) {
+                    dcx.error(
+                        lt,
+                        format!("`{lt}` is neither a lifetime in generics nor a field name"),
+                    );
+                    return;
+                }
+
+                captures.insert(Capture {
+                    variance: wildcard_variance.clone(),
+                    lifetime: lt.clone(),
+                });
+            })
+            .visit_type(&field.ty);
+
+            for capture in captures.iter(){
+                if !all_exist_lifetimes.contains(&capture.lifetime){
+                    implicitly_borrowed.insert(capture.lifetime.ident.clone());
+                }
+            }
+
+            let borrowed = BorrowedKind::parse(dcx, &mut field.attrs).and_then(|kind| {
+                let lifetime = Lifetime::from_ident(&member.as_ident());
+
+                if bound_lifetimes.contains(&lifetime) {
+                    dcx.error(
+                        &lifetime,
+                        format!("`{lifetime}` appear in generics and would conflict with field lifetime"),
+                    );
+                    return None;
+                }
+
+                Some(BorrowedInfo { kind, lifetime, lt_variance: Variance::default() })
+            });
+
             FieldInfo {
-                field: &*field,
+                field,
                 member,
-                pinned: pinned_count != 0,
+                pinned,
+                borrowed,
+                captures,
             }
         })
         .collect();
 
-    for field in &fields {
+    for field_name in implicitly_borrowed.into_iter() {
+        let field = &mut fields[field_idx_map[&field_name]];
+
+        // If field is not explicit marked as borrowed, infer a shared borrow.
+        if field.borrowed.is_none() {
+            field.borrowed = Some(BorrowedInfo {
+                kind: BorrowedKind::Shared,
+                // Obtaining from `field` instead of `field_name` for the correct span.
+                lifetime: Lifetime::from_ident(&field.member.as_ident()),
+                lt_variance: Variance::Covariant,
+            });
+        }
+    }
+
+    // Check that field lifetimes do not appear in the bounds.
+    Lifetime::visitor(|lt| {
+        if bound_lifetimes.contains(&lt) {
+            return;
+        }
+
+        if field_idx_map.contains_key(&lt.ident) {
+            // Forbid the use of field lifetimes within bounds.
+            dcx.error(lt, "field lifetimes cannot be used in bounds");
+        }
+
+        // Otherwise this is completely unbound. Let Rust compiler produce that error instead.
+    })
+    .visit_generics(&struct_.generics);
+
+    // Obtain an closure of invariant fields.
+    //
+    // If invariant field captures a field lifetime, then we also need to make sure that field
+    // is also invariant. For example, say we have a struct `SelfRef<'a>` and a field `f: &'a ()`.
+    // Conceptually, a field's type must outlive the field's lifetime, so if we have a covariant
+    // `'a`, we can have a shortened `SelfRef<'short_a>` where `'f` outlives `'a`. This will enable
+    // the `&'short_a ()` to `&'f ()` coercion, which effectively shortens `'f` too, so we break the
+    // invariance of the field lifetime.
+    let mut invariant_field_idx = BTreeSet::new();
+    let mut worklist = Vec::new();
+    for field in fields.iter() {
+        for borrow in field.captures.iter() {
+            if let Variance::Invariant = borrow.variance {
+                let Some(borrow_idx) = fields
+                    .iter()
+                    .position(|f| f.member.as_ident() == borrow.lifetime.ident)
+                else {
+                    continue;
+                };
+                if invariant_field_idx.insert(borrow_idx) {
+                    worklist.push(&fields[borrow_idx]);
+                }
+            }
+        }
+    }
+    while let Some(field) = worklist.pop() {
+        for borrow in field.captures.iter() {
+            let Some(borrow_idx) = fields
+                .iter()
+                .position(|f| f.member.as_ident() == borrow.lifetime.ident)
+            else {
+                continue;
+            };
+            let borrow = &fields[borrow_idx];
+            if invariant_field_idx.insert(borrow_idx) {
+                worklist.push(borrow);
+            }
+        }
+    }
+    for idx in invariant_field_idx {
+        fields[idx].borrowed.as_mut().unwrap().lt_variance = Variance::Invariant;
+    }
+
+    // Create a lifetime parameter for each field.
+    let borrowed_fields: Vec<_> = fields
+        .iter()
+        .filter_map(|f| Some(f.borrowed.as_ref()?))
+        .collect();
+    let borrowed_covariant_fields: Vec<_> = borrowed_fields
+        .iter()
+        .filter(|f| f.lt_variance == Variance::Covariant)
+        .collect();
+    let borrowed_invariant_fields: Vec<_> = borrowed_fields
+        .iter()
+        .filter(|f| f.lt_variance == Variance::Invariant)
+        .collect();
+
+    let field_lifetime_outlive_chain = Generics {
+        lt_token: None,
+        params: borrowed_fields
+            .iter()
+            .zip(std::iter::once(None).chain(borrowed_fields.iter().map(Some)))
+            .map(|(borrowed, prev)| {
+                GenericParam::Lifetime(LifetimeParam {
+                    attrs: Vec::new(),
+                    lifetime: borrowed.lifetime.clone(),
+                    colon_token: None,
+                    bounds: prev
+                        .iter()
+                        .map(|borrowed| borrowed.lifetime.clone())
+                        .collect(),
+                })
+            })
+            .collect(),
+        gt_token: None,
+        where_clause: None,
+    };
+
+    let exist_lt_generics = Generics {
+        lt_token: Some(Default::default()),
+        params: exist_lifetimes
+            .iter()
+            .map(|l| {
+                GenericParam::Lifetime(LifetimeParam {
+                    attrs: Vec::new(),
+                    lifetime: l.lifetime.clone(),
+                    colon_token: Default::default(),
+                    bounds: l.bounds.iter().cloned().collect(),
+                })
+            })
+            .collect(),
+        gt_token: Some(Default::default()),
+        where_clause: None,
+    };
+    let mut field_exist_lt_generics = field_lifetime_outlive_chain.clone();
+    field_exist_lt_generics
+        .params
+        .extend(exist_lt_generics.params.clone());
+
+    let mut field_lt_split_variance_outlive_chain = Generics {
+        lt_token: Some(Default::default()),
+        params: borrowed_covariant_fields
+            .iter()
+            .zip(std::iter::once(None).chain(borrowed_covariant_fields.iter().map(Some)))
+            .map(|(borrowed, prev)| {
+                GenericParam::Lifetime(LifetimeParam {
+                    attrs: Vec::new(),
+                    lifetime: borrowed.lifetime.clone(),
+                    colon_token: None,
+                    bounds: prev
+                        .iter()
+                        .map(|borrowed| borrowed.lifetime.clone())
+                        .collect(),
+                })
+            })
+            .chain(
+                borrowed_invariant_fields
+                    .iter()
+                    .zip(std::iter::once(None).chain(borrowed_invariant_fields.iter().map(Some)))
+                    .map(|(borrowed, prev)| {
+                        GenericParam::Lifetime(LifetimeParam {
+                            attrs: Vec::new(),
+                            lifetime: borrowed.lifetime.clone(),
+                            colon_token: None,
+                            bounds: prev
+                                .iter()
+                                .map(|borrowed| borrowed.lifetime.clone())
+                                .collect(),
+                        })
+                    }),
+            )
+            .collect(),
+        gt_token: Some(Default::default()),
+        where_clause: None,
+    };
+
+    // For `field_lt_split_variance_outlive_chain`, we may need to insert some additonal bounds for
+    // types to be WF.
+    for f in fields.iter() {
+        let Some(borrowed) = &f.borrowed else {
+            continue;
+        };
+
+        // If a field is invariant, then the invariance closure rule will make all borrowed fields
+        // to be invariant, so they're already captured in `field_lt_split_variance_outlive_chain`.
+        if borrowed.lt_variance != Variance::Covariant {
+            continue;
+        }
+
+        for capture in f.captures.iter() {
+            let Some(&idx) = field_idx_map.get(&capture.lifetime.ident) else {
+                continue;
+            };
+
+            let prev_borrowed = fields[idx].borrowed.as_ref().unwrap();
+
+            // If borrowed field is covariant, it's already captured in
+            // `field_lt_split_variance_outlive_chain`.
+            if prev_borrowed.lt_variance == Variance::Invariant {
+                // Covariant field borrowing an invariant field. This is not captured in the chain
+                // so we need to add additional bound. This bound is okay, as the invariant lifetime
+                // is the longer living one, so arbitrary shortening of the covariant one does not
+                // violate their relation.
+                let param = field_lt_split_variance_outlive_chain
+                    .lifetimes_mut()
+                    .find(|l| l.lifetime == prev_borrowed.lifetime)
+                    .unwrap();
+                param.bounds.push(borrowed.lifetime.clone());
+            }
+        }
+    }
+
+    struct_.fields = Fields::Unit;
+    let info = StructInfo {
+        self_referential: fields
+            .iter()
+            .any(|f| !f.captures.is_empty() || f.borrowed.is_some()),
+        args,
+        struct_,
+        fields: fields,
+        field_idx_map,
+        is_tuple_struct,
+        field_lt_outlive_chain: field_lifetime_outlive_chain,
+        field_lt_split_variance_outlive_chain,
+        exist_lt: exist_lt_generics,
+    };
+
+    for field in &info.fields {
         if !field.pinned && is_phantom_pinned(&field.field.ty) {
             dcx.warn(
-                field.field,
+                &field.field,
                 format!(
                     "The field {} of type `PhantomPinned` only has an effect \
                     if it has the `#[pin]` attribute",
@@ -177,24 +678,26 @@ pub(crate) fn pin_data(
         }
     }
 
-    let unpin_impl = generate_unpin_impl(&struct_.ident, &struct_.generics, &fields);
-    let drop_impl = generate_drop_impl(&struct_.ident, &struct_.generics, args);
-    let projections = generate_projections(
-        &struct_.vis,
-        &struct_.ident,
-        &struct_.generics,
-        is_tuple_struct,
-        &fields,
+    let struct_def = generate_struct_def(&info, &exist_lifetimes);
+    let unpin_impl = generate_unpin_impl(&info);
+    let drop_impl = generate_drop_impl(&info);
+    let drop_order_check = generate_drop_order_check(dcx, &info);
+    let variance_check = generate_variance_check(&info);
+    let projections = generate_projections(&info, &exist_lifetimes);
+    let the_pin_data = generate_the_pin_data(
+        &info,
+        &info.field_lt_outlive_chain,
+        &field_exist_lt_generics,
     );
-    let the_pin_data =
-        generate_the_pin_data(&struct_.vis, &struct_.ident, &struct_.generics, &fields);
 
     Ok(quote! {
-        #struct_
-        #projections
+        #struct_def
         // We put the rest into this const item, because it then will not be accessible to anything
         // outside.
         const _: () = {
+            #drop_order_check
+            #variance_check
+            #projections
             #the_pin_data
             #unpin_impl
             #drop_impl
@@ -226,23 +729,206 @@ fn is_phantom_pinned(ty: &Type) -> bool {
     }
 }
 
-fn generate_unpin_impl(
-    ident: &Ident,
-    generics: &Generics,
-    fields: &[FieldInfo<'_>],
-) -> TokenStream {
+struct ExistLt {
+    lifetime: Lifetime,
+    bounds: Vec<Lifetime>,
+}
+
+fn parse_existential_lifetimes(dcx: &mut DiagCtxt, whr: &mut WhereClause) -> Vec<ExistLt> {
+    fn parse_one(dcx: &mut DiagCtxt, pred: &WherePredicate, result: &mut Vec<ExistLt>) -> bool {
+        let WherePredicate::Type(pred) = &pred else {
+            return false;
+        };
+        let Type::Path(path) = &pred.bounded_ty else {
+            return false;
+        };
+
+        if path.qself.is_some()
+            || path.path.leading_colon.is_some()
+            || path.path.segments.len() != 1
+        {
+            return false;
+        }
+        let path_seg = &path.path.segments[0];
+
+        if path_seg.ident != "exists" {
+            return false;
+        };
+
+        let PathArguments::AngleBracketed(p) = &path_seg.arguments else {
+            dcx.error(
+                path_seg,
+                "existential clauses require a lifetime, e.g. `exists<'a>`",
+            );
+            return true;
+        };
+
+        let mut lifetimes = Vec::new();
+        for arg in p.args.iter() {
+            let GenericArgument::Lifetime(lt) = arg else {
+                dcx.error(arg, "only lifetime can appear in existential clauses");
+                return true;
+            };
+
+            lifetimes.push(lt.clone());
+        }
+
+        let mut bounds = Vec::new();
+        for bound in pred.bounds.iter() {
+            let TypeParamBound::Lifetime(lt) = bound else {
+                dcx.error(bound, "only lifetime can appear in existential clauses");
+                return true;
+            };
+            bounds.push(lt.clone());
+        }
+        if bounds.is_empty() {
+            dcx.error(
+                pred.colon_token,
+                "existential clauses require at least one outlive bounds",
+            );
+            return true;
+        }
+
+        result.extend(lifetimes.into_iter().map(|lifetime| ExistLt {
+            lifetime,
+            bounds: bounds.clone(),
+        }));
+
+        true
+    }
+
+    let mut result = Vec::new();
+    whr.predicates = std::mem::take(&mut whr.predicates)
+        .into_pairs()
+        .filter(|p| !parse_one(dcx, p.value(), &mut result))
+        .collect();
+
+    result
+}
+
+fn generate_struct_def(info: &StructInfo, exist_lt: &[ExistLt]) -> TokenStream {
+    let ItemStruct {
+        attrs,
+        vis,
+        struct_token,
+        ident,
+        generics,
+        fields: _,
+        semi_token,
+    } = &info.struct_;
+
+    let mut phantom = None;
+    if !exist_lt.is_empty() {
+        let mut exist_lt_phantom: Vec<_> = exist_lt.iter().flat_map(|l| l.bounds.iter()).collect();
+        exist_lt_phantom.sort_unstable();
+        exist_lt_phantom.dedup();
+        phantom = Some(quote!((#(::pin_init::__internal::ExistLt<#exist_lt_phantom>),*)));
+    }
+
+    let generated_fields = info.fields.iter().map(|field| {
+        let Field {
+            attrs,
+            vis,
+            mutability: _,
+            ident,
+            colon_token,
+            ty,
+        } = &field.field;
+
+        let mut ty = ty.to_token_stream();
+
+        // Replace lifetime for self-referential fields. For mutable fields, this uses `Erase` to block direct access.
+        if !field.captures.is_empty()
+            || matches!(
+                field.borrowed,
+                Some(BorrowedInfo {
+                    kind: BorrowedKind::Mutable,
+                    ..
+                })
+            )
+        {
+            // Build a chain `for<'a> fn(&'a ()) -> ... -> (Ty,)`. Such type will have a `EraseTy` implementation and thus may be used
+            // inside `Erased`.
+            ty = quote!((#ty,));
+
+            for borrow in field.captures.iter().rev() {
+                let lt = &borrow.lifetime;
+                ty = quote!(for<#lt> fn(&#lt()) -> #ty);
+            }
+
+            ty = quote!(::pin_init::__internal::Erase<#ty>);
+
+            if let Some(phantom) = phantom.take() {
+                ty = quote!(::pin_init::__internal::WithPhantom<#ty, #phantom>);
+            }
+        };
+
+        if let Some(borrowed) = &field.borrowed {
+            if matches!(borrowed.lt_variance, Variance::Invariant) {
+                // If we need to mark this field as invariant but it is not done so already by `Erase`'s invariance.
+                ty = quote!(::pin_init::__internal::BorrowedInvariant<#ty>);
+            } else {
+                ty = quote!(::pin_init::__internal::Borrowed<#ty>);
+            }
+        }
+
+        quote! {
+           #(#attrs)* #vis #ident #colon_token #ty
+        }
+    });
+
+    let whr = &generics.where_clause;
+
+    if info.is_tuple_struct {
+        quote!(
+            #(#attrs)*
+            #vis
+            #struct_token #ident #generics (#(#generated_fields,)*) #whr
+            #semi_token
+        )
+    } else {
+        quote!(
+            #(#attrs)*
+            #vis
+            #struct_token #ident #generics #whr {
+                #(#generated_fields,)*
+            }
+            #semi_token
+        )
+    }
+}
+
+fn generate_unpin_impl(info: &StructInfo) -> TokenStream {
+    let ItemStruct {
+        generics, ident, ..
+    } = &info.struct_;
     let (impl_generics, ty_generics, whr) = generics.split_for_impl();
     let predicates = whr
         .map(|x| &x.predicates)
         .unwrap_or(const { &Punctuated::new() });
 
-    let pinned_fields = fields.iter().filter(|f| f.pinned).map(|f| {
+    if info.self_referential {
+        // Self-referential structs must always be pinned.
+        return quote! {
+            #[doc(hidden)]
+            impl #impl_generics ::core::marker::Unpin for #ident #ty_generics
+            where
+                // the `for<'__dummy>` HRTB makes this not error without the `trivial_bounds`
+                // feature <https://github.com/rust-lang/rust/issues/48214#issuecomment-2557829956>.
+                for<'__dummy> ::core::marker::PhantomPinned: ::core::marker::Unpin,
+                #predicates
+            {}
+        };
+    }
+
+    let pinned_fields = info.fields.iter().filter(|f| f.pinned).map(|f| {
         let ident = f.member.as_ident();
         let ty = &f.field.ty;
         quote!(
             #ident: #ty
         )
     });
+
     quote! {
         // This struct will be used for the unpin analysis. It is needed, because only structurally
         // pinned fields are relevant whether the struct should implement `Unpin`.
@@ -267,9 +953,12 @@ fn generate_unpin_impl(
     }
 }
 
-fn generate_drop_impl(ident: &Ident, generics: &Generics, args: Args) -> TokenStream {
+fn generate_drop_impl(info: &StructInfo) -> TokenStream {
+    let ItemStruct {
+        generics, ident, ..
+    } = &info.struct_;
     let (impl_generics, ty_generics, whr) = generics.split_for_impl();
-    let has_pinned_drop = matches!(args, Args::PinnedDrop(_));
+    let has_pinned_drop = matches!(info.args, Args::PinnedDrop(_));
     // We need to disallow normal `Drop` implementation, the exact behavior depends on whether
     // `PinnedDrop` was specified in `args`.
     if has_pinned_drop {
@@ -314,74 +1003,475 @@ fn generate_drop_impl(ident: &Ident, generics: &Generics, args: Args) -> TokenSt
     }
 }
 
-fn generate_projections(
-    vis: &Visibility,
-    ident: &Ident,
-    generics: &Generics,
-    is_tuple_struct: bool,
-    fields: &[FieldInfo<'_>],
-) -> TokenStream {
-    let (impl_generics, ty_generics, _) = generics.split_for_impl();
-    let mut generics_with_pin_lt = generics.clone();
-    generics_with_pin_lt.params.insert(0, parse_quote!('__pin));
-    let (_, ty_generics_with_pin_lt, whr) = generics_with_pin_lt.split_for_impl();
-    let projection = format_ident!("{ident}Projection");
+fn generate_drop_order_check(dcx: &mut DiagCtxt, info: &StructInfo) -> TokenStream {
+    let ItemStruct {
+        ident: struct_name,
+        generics,
+        ..
+    } = &info.struct_;
+
+    // If the struct is not self-referential then we can just skip.
+    if !info.self_referential {
+        return quote!();
+    }
+
+    // Make sure fields are dropped earlier than the fields that they borrow.
+    for (i, field) in info.fields.iter().enumerate() {
+        let ident = field.member.as_ident();
+        for capture in &field.captures {
+            let borrowed_field = &capture.lifetime.ident;
+
+            if let Some(&borrowed_idx) = info.field_idx_map.get(borrowed_field) {
+                if i == borrowed_idx {
+                    // We need a strict outlive relationship, in case the lifetime is needed by the
+                    // field's drop glue.
+                    dcx.error(
+                        borrowed_field,
+                        format!("field `{ident}` cannot borrow from itself"),
+                    );
+                } else if i > borrowed_idx {
+                    dcx.error(
+                        borrowed_field,
+                        format!("field `{ident}` borrows `{borrowed_field}`, but drops later"),
+                    );
+                }
+            }
+        }
+    }
+
+    // The check above is necessary, but not sufficient.
+    //
+    // Consider this case:
+    // ```
+    // struct Foo {
+    //     x: &'b &'a (),
+    //     a: String,
+    //     y: PrintOnDrop<&'b str>,
+    //     b: String,
+    // }
+    // ```
+    // we need to ensure that `b` will strictly outlive `a`.
+    //
+    // Rust needs to ensure that types are well-formed; in the above example, `&'b &'a ()` is
+    // well-formed only if `a` outlive `b`. To avoid requiring everyone from having to express this
+    // bound explicitly when declaring a struct, the `'b: 'a` bound is inferred by the Rust
+    // compiler. However this causes an issue, where now `&'a str` can be coerced to `&'b str`
+    // because compiler thinks that it shorten the lifetime. We'll be able to put a reference to `a`
+    // into `y`; but `a` drops first, so when `y` drops, it accesses `a` and causes a
+    // use-after-free!
+    //
+    // Therefore, we must ensure the types contained within the struct has their implied bound being
+    // consistent with the actual lifetime relationship. We create a `__drop_order_check` function,
+    // with known lifetime bounds as bounds on the function, and asks Rust to *prove* that the types
+    // are wellformed, given the bounds.
+
+    let generics_with_field_lt = CombinedGenerics(vec![
+        &info.exist_lt,
+        &info.field_lt_split_variance_outlive_chain,
+        generics,
+    ]);
+
+    let (_, ty_generics, _) = generics.split_for_impl();
+    let (impl_generics_with_field_lt, _, _) = generics_with_field_lt.split_for_impl();
+
+    let mut where_clause = generics
+        .where_clause
+        .clone()
+        .unwrap_or_else(|| WhereClause {
+            where_token: Default::default(),
+            predicates: Default::default(),
+        });
+
+    // Construct bounds where generic lifetime outlives field lifetimes, so field types can refer to generics.
+    for field in info
+        .fields
+        .iter()
+        .filter_map(|f| Some(f.borrowed.as_ref()?))
+        .filter(|f| f.lt_variance == Variance::Covariant)
+        .last()
+        .into_iter()
+        .chain(
+            info.fields
+                .iter()
+                .filter_map(|f| Some(f.borrowed.as_ref()?))
+                .filter(|f| f.lt_variance == Variance::Invariant)
+                .last(),
+        )
+    {
+        let field_lt = &field.lifetime;
+        for param in generics.params.iter() {
+            match param {
+                GenericParam::Lifetime(param) => {
+                    let lifetime = &param.lifetime;
+                    where_clause
+                        .predicates
+                        .push(parse_quote!(#lifetime: #field_lt));
+                }
+                GenericParam::Type(param) => {
+                    let ident = &param.ident;
+                    where_clause
+                        .predicates
+                        .push(parse_quote!(#ident: #field_lt));
+                }
+                GenericParam::Const(_) => (),
+            }
+        }
+    }
+
+    // Prove the wellformedness of struct fields with regarding to the bounds of
+    // `__drop_order_check`.
+    //
+    // Consider this case:
+    // ```
+    // struct Foo {
+    //     x: &'b &'a (),
+    //     a: String,
+    //     y: PrintOnDrop<&'b str>,
+    //     b: String,
+    // }
+    // ```
+    // we need to ensure that `b` will strictly outlive `a`.
+    //
+    // Rust needs to ensure that types are well-formed; in the above example, `&'b &'a ()` is
+    // well-formed only if `a` outlive `b`. To avoid requiring everyone from having to express this
+    // bound explicitly when declaring a struct, the `'b: 'a` bound is inferred by the Rust
+    // compiler. However this causes an issue, where now `&'a str` can be coerced to `&'b str`
+    // because compiler thinks that it shorten the lifetime. We'll be able to put a reference to `a`
+    // into `y`; but `a` drops first, so when `y` drops, it accesses `a` and causes a
+    // use-after-free!
+    //
+    // Rust needs to *prove* the wellformedness of the type below, taking into account only the
+    // explicitly defined bounds plus the bounds implied by the lifetime-erased struct (but not
+    // the full implied bound between the field lifetimes).
+    let wf_proofs = info.fields.iter().rev().map(|f| {
+        let ty = &f.field.ty;
+        let ident = f.member.as_ident();
+        if let Some(borrowed) = &f.borrowed {
+            let lt = &borrowed.lifetime;
+            quote!(
+                let #ident: &#lt mut #ty = loop {};
+            )
+        } else {
+            quote!(
+                let #ident: #ty = loop {};
+            )
+        }
+    });
+
+    let struct_span = struct_name.span().resolved_at(Span::mixed_site());
+    quote_spanned! {struct_span =>
+        #[allow(non_snake_case, unused)]
+        fn __drop_order_check #impl_generics_with_field_lt (
+            // This must be present so the function can *assume* the implied bounds on the erased
+            // struct. For example, if the struct has `&'a T`, Rust will infer `T: 'a`; we still
+            // wantb to assume these bounds as they are not relevant to the field lifetimes.
+            _: &#struct_name #ty_generics,
+        ) #where_clause {
+            #(#wf_proofs)*
+        }
+    }
+}
+
+/// Produce variance checks, so we can ensure that the variance of lifetimes captured by field types
+/// actually match our expectation.
+fn generate_variance_check(info: &StructInfo) -> TokenStream {
+    if !info.self_referential {
+        return quote!();
+    }
+
+    let mut checks = Vec::new();
+
+    for f in info.fields.iter() {
+        let covariant_captures: Vec<_> = f
+            .captures
+            .iter()
+            .filter(|b| b.variance == Variance::Covariant)
+            .map(|b| &b.lifetime)
+            .collect();
+        if covariant_captures.is_empty() {
+            continue;
+        }
+
+        let ident = f.member.as_ident();
+        // Use the span of type for better error message.
+        let span = f.field.ty.span().resolved_at(Span::mixed_site());
+
+        let other_field_lifetimes = Generics {
+            lt_token: None,
+            params: f
+                .captures
+                .iter()
+                .filter(|b| b.variance != Variance::Covariant)
+                .map(|b| GenericParam::Lifetime(LifetimeParam::new(b.lifetime.clone().into())))
+                .collect(),
+            gt_token: None,
+            where_clause: None,
+        };
+
+        let long = Lifetime::new("'__long", span);
+        let long_ty = f
+            .field
+            .ty
+            .replace_lifetimes(&covariant_captures, &vec![&long; covariant_captures.len()]);
+
+        let short = Lifetime::new("'__short", span);
+        let short_ty = f
+            .field
+            .ty
+            .replace_lifetimes(&covariant_captures, &vec![&short; covariant_captures.len()]);
+
+        let check_name = format_ident!("__{ident}_covariance", span = span);
+
+        // Add `<'__long: '__short, 'short>` as additional generics.
+        let covariance_check_generics = parse_quote!(<#long: #short, #short>);
+        let combined_generics = CombinedGenerics(vec![
+            &covariance_check_generics,
+            &other_field_lifetimes,
+            &info.struct_.generics,
+        ]);
+
+        checks.push(quote_spanned!(span =>
+            // Emit a check to ensure the type is *really* covariant for soundness.
+            fn #check_name #combined_generics (long: #long_ty) -> #short_ty {
+                long
+            }
+        ));
+    }
+
+    quote!(
+        #(#checks)*
+    )
+}
+
+fn generate_projections(info: &StructInfo, exist_lt: &[ExistLt]) -> TokenStream {
+    let ItemStruct {
+        vis,
+        ident,
+        generics,
+        ..
+    } = &info.struct_;
+    let this_lt = Lifetime::new("'__this", Span::mixed_site());
+    let this_lt_generics: Generics = parse_quote!(<#this_lt>);
+
+    let generics_with_this_lt = CombinedGenerics(vec![&this_lt_generics, generics]);
+    let generics_with_this_field_lt = CombinedGenerics(vec![
+        &this_lt_generics,
+        &info.exist_lt,
+        &info.field_lt_outlive_chain,
+        generics,
+    ]);
+    let generics_with_this_field_ref_lt = CombinedGenerics(vec![
+        &this_lt_generics,
+        &info.field_lt_split_variance_outlive_chain,
+        generics,
+    ]);
+    let (impl_generics, ty_generics, whr) = generics.split_for_impl();
+
+    let mut g = info.field_lt_outlive_chain.clone();
+    g.params.extend(info.exist_lt.params.clone());
+    let field_lt_for_generics = g.for_generics();
+    let (_, ty_generics_with_this_lt, _) = generics_with_this_lt.split_for_impl();
+    let (_, ty_generics_with_this_field_lt, _) = generics_with_this_field_lt.split_for_impl();
+    let (_, ty_generics_with_this_field_ref_lt, _) =
+        generics_with_this_field_ref_lt.split_for_impl();
+
     let this = format_ident!("this");
 
-    let (fields_decl, fields_proj): (Vec<_>, Vec<_>) = fields
+    let mut exist_lt_phantoms = None;
+    let mut exist_lt_phantoms_proj = None;
+    if !exist_lt.is_empty() {
+        let name = (!info.is_tuple_struct).then(|| quote!(__exist_lt_phantom:));
+        let mut exist_lt_phantom: Vec<_> = exist_lt.iter().flat_map(|l| l.bounds.iter()).collect();
+        exist_lt_phantom.sort_unstable();
+        exist_lt_phantom.dedup();
+        exist_lt_phantoms =
+            Some(quote!(#name ::core::marker::PhantomData<(#(&#exist_lt_phantom ()),*)>,));
+        exist_lt_phantoms_proj = Some(quote!(#name ::core::marker::PhantomData,));
+    }
+
+    let (fields_decl, fields_proj): (Vec<_>, Vec<_>) = info
+        .fields
         .iter()
-        .map(|field| {
-            let Field { vis, ty, .. } = &field.field;
-            let member = &field.member;
+        .map(|f| {
+            let vis = &f.field.vis;
+            let ident = f.member.as_ident();
+            let member = &f.member;
             // The projection of a tuple struct is a tuple struct itself, so its fields are
             // positional and must not be named.
-            let name = (!is_tuple_struct).then(|| {
-                let ident = field.member.as_ident();
-                quote!(#ident:)
-            });
+            let name = (!info.is_tuple_struct).then(|| quote!(#ident:));
 
-            if field.pinned {
+            // if `f.ty` contains field lifetimes, which we need to replace them with shorter
+            // `'__this` lifetime as field lifetimes are not available in this context.
+            let all_lifetimes: Vec<_> = f.captures.iter().map(|b| &b.lifetime).collect();
+            let ty = f
+                .field
+                .ty
+                .replace_lifetimes(&all_lifetimes, &vec![&this_lt; all_lifetimes.len()]);
+
+            // Fields sharedly borrowed by other fields can only be shared accessed. Fields that
+            // references other field and are covariant can also only be given shared reference
+            // as mutable reference is invariant.
+            let mut_token: Option<Token![mut]> = if f.borrowed.is_none() && f.captures.is_empty() {
+                Some(Default::default())
+            } else {
+                None
+            };
+
+            let mut accessor = quote!(&#mut_token #this.#member);
+            if !f.captures.is_empty() || f.borrowed.is_some() {
+                accessor = quote!(
+                    // SAFETY: we have `SelfRef<..>` which we know is layout compatible with `f.ty`.
+                    // Field lifetimes in `f.ty` can be shortened to `#ty` due to covariance.
+                    unsafe { core::mem::transmute::<_, &#mut_token #ty>(#accessor) }
+                )
+            }
+
+            if !f.captures.iter().all(|b| b.variance == Variance::Covariant)
+                || matches!(
+                    f.borrowed,
+                    Some(BorrowedInfo {
+                        kind: BorrowedKind::Mutable,
+                        ..
+                    })
+                )
+            {
+                // If the type is not covariant, it must omitted, as projection shortens the
+                // lifetime to `'__this`.
+                // Mutable borrow must be omitted for aliasing reason.
                 (
                     quote!(
-                        #vis #name ::core::pin::Pin<&'__pin mut #ty>,
+                        #vis #name ::pin_init::__internal::NotVisible<&'__this #mut_token #ty>,
+                    ),
+                    quote!(
+                        #name ::pin_init::__internal::NotVisible::new(),
+                    ),
+                )
+            } else if f.pinned {
+                (
+                    quote!(
+                        #vis #name ::core::pin::Pin<&'__this #mut_token #ty>,
                     ),
                     quote!(
                         // SAFETY: this field is structurally pinned.
-                        #name unsafe { ::core::pin::Pin::new_unchecked(&mut #this.#member) },
+                        #name unsafe { ::core::pin::Pin::new_unchecked(#accessor) },
                     ),
                 )
             } else {
                 (
                     quote!(
-                        #vis #name &'__pin mut #ty,
+                        #vis #name &'__this #mut_token #ty,
                     ),
                     quote!(
-                        #name &mut #this.#member,
+                        #name #accessor,
                     ),
                 )
             }
         })
         .collect();
-    let structurally_pinned_fields_docs = fields
+
+    let (fields_decl_lt, fields_proj_lt): (Vec<_>, Vec<_>) = info
+        .fields
+        .iter()
+        .map(|f| {
+            let vis = &f.field.vis;
+            let ident = f.member.as_ident();
+            let member = &f.member;
+            let name = (!info.is_tuple_struct).then(|| quote!(#ident:));
+
+            let ty = &f.field.ty;
+
+            // Fields shared-referenced by other fields can only be shared accessed.
+            let mut_token: Option<Token![mut]> = if f.borrowed.is_none() {
+                Some(Default::default())
+            } else {
+                None
+            };
+
+            let mut accessor = quote!(&#mut_token #this.#member);
+            if !f.captures.is_empty() || f.borrowed.is_some() {
+                accessor = quote!(
+                    // SAFETY: we have `SelfRef<..>` which we know is layout compatible with `f.ty`.
+                    // We cannot include explicit type name here as the field lifetimes are nameable
+                    // in this context, so `for<'field_name> ..` would fail.
+                    unsafe { core::mem::transmute(#accessor) }
+                )
+            }
+
+            // In `with_project`, borrowed fields have their field lifetime available, so use it
+            // instead of `'__this`.
+            let lt = if f.borrowed.is_some() {
+                Lifetime::from_ident(&ident)
+            } else {
+                this_lt.clone()
+            };
+
+            if matches!(
+                f.borrowed,
+                Some(BorrowedInfo {
+                    kind: BorrowedKind::Mutable,
+                    ..
+                })
+            ) {
+                // If the type is not covariant, it must omitted, as projection shortens the
+                // lifetime to `'__this`.
+                // Mutable borrow must be omitted for aliasing reason.
+                (
+                    quote!(
+                        #vis #name ::pin_init::__internal::NotVisible<&#lt #mut_token #ty>,
+                    ),
+                    quote!(
+                        #name ::pin_init::__internal::NotVisible::new(),
+                    ),
+                )
+            } else if f.pinned {
+                (
+                    quote!(
+                        #vis #name ::core::pin::Pin<&#lt #mut_token #ty>,
+                    ),
+                    quote!(
+                        // SAFETY: this field is structurally pinned.
+                        #name unsafe { ::core::pin::Pin::new_unchecked(#accessor) },
+                    ),
+                )
+            } else {
+                (
+                    quote!(
+                        #vis #name &#lt #mut_token #ty,
+                    ),
+                    quote!(
+                        #name #accessor,
+                    ),
+                )
+            }
+        })
+        .collect();
+
+    let structurally_pinned_fields_docs: Vec<_> = info
+        .fields
         .iter()
         .filter(|f| f.pinned)
-        .map(|f| format!(" - {}", f.member.display_name()));
-    let not_structurally_pinned_fields_docs = fields
+        .map(|f| format!(" - {}", f.member.display_name()))
+        .collect();
+    let not_structurally_pinned_fields_docs: Vec<_> = info
+        .fields
         .iter()
         .filter(|f| !f.pinned)
-        .map(|f| format!(" - {}", f.member.display_name()));
+        .map(|f| format!(" - {}", f.member.display_name()))
+        .collect();
     let docs = format!(" Pin-projections of [`{ident}`]");
-    let (projection_def, projection_init) = if is_tuple_struct {
+    let (projection_def, projection_init) = if info.is_tuple_struct {
         (
             quote! {
-                #vis struct #projection #generics_with_pin_lt (
+                #vis struct __Projection #generics_with_this_lt (
                     #(#fields_decl)*
-                    ::core::marker::PhantomData<&'__pin mut ()>,
+                    #exist_lt_phantoms
+                    ::core::marker::PhantomData<&'__this #ident #ty_generics>,
                 ) #whr;
             },
             quote! {
-                #projection(
+                __Projection(
                     #(#fields_proj)*
+                    #exist_lt_phantoms_proj
                     ::core::marker::PhantomData,
                 )
             },
@@ -389,21 +1479,222 @@ fn generate_projections(
     } else {
         (
             quote! {
-                #vis struct #projection #generics_with_pin_lt
+                #vis struct __Projection #generics_with_this_lt
                     #whr
                 {
                     #(#fields_decl)*
-                    ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut ()>,
+                    #exist_lt_phantoms
+                    ___pin_phantom_data: ::core::marker::PhantomData<&'__this #ident #ty_generics>,
                 }
             },
             quote! {
-                #projection {
+                __Projection {
                     #(#fields_proj)*
+                    #exist_lt_phantoms_proj
                     ___pin_phantom_data: ::core::marker::PhantomData,
                 }
             },
         )
     };
+
+    let projection_lt = format_ident!("__ProjectionLt");
+    let (projection_lt_def, projection_lt_init) = if info.is_tuple_struct {
+        (
+            quote! {
+                #vis struct #projection_lt #generics_with_this_field_lt (
+                    #(#fields_decl_lt)*
+                    ::core::marker::PhantomData<&'__this mut ()>,
+                ) #whr;
+            },
+            quote! {
+                #projection_lt(
+                    #(#fields_proj_lt)*
+                    ::core::marker::PhantomData,
+                )
+            },
+        )
+    } else {
+        (
+            quote! {
+                #vis struct #projection_lt #generics_with_this_field_lt
+                    #whr
+                {
+                    #(#fields_decl_lt)*
+                    ___pin_phantom_data: ::core::marker::PhantomData<&'__this mut ()>,
+                }
+            },
+            quote! {
+                #projection_lt {
+                    #(#fields_proj_lt)*
+                    ___pin_phantom_data: ::core::marker::PhantomData,
+                }
+            },
+        )
+    };
+
+    // For fields that references other fields, field access syntax stops working as they're wrapped
+    // behind `SelfRef` because their actual lifetime is not on the struct.
+    //
+    // Generate an accessor method for them.
+    let mut accessors = Vec::new();
+    for f in info.fields.iter() {
+        let ident = f.member.as_ident();
+        let member = &f.member;
+
+        if f.captures.is_empty() {
+            // They can be accessed normally, no accessor to be generated.
+            continue;
+        }
+
+        if matches!(
+            f.borrowed,
+            Some(BorrowedInfo {
+                kind: BorrowedKind::Mutable,
+                ..
+            })
+        ) {
+            // Mutably borrowed fields cannot be accessed directly under any circumstance.
+            continue;
+        }
+
+        if f.captures.iter().all(|b| b.variance == Variance::Covariant) {
+            let f_doc = format!("Access the `{ident}` field on a shared reference of `Self`.");
+            let vis = &f.field.vis;
+
+            // Use the span of type for better error message.
+            let span = f.field.ty.span().resolved_at(Span::mixed_site());
+
+            let all_lifetimes: Vec<_> = f.captures.iter().map(|b| &b.lifetime).collect();
+            let ty = f
+                .field
+                .ty
+                .replace_lifetimes(&all_lifetimes, &vec![&this_lt; all_lifetimes.len()]);
+
+            accessors.push(quote_spanned!(span =>
+                #[doc = #f_doc]
+                #[inline]
+                #vis fn #ident<#this_lt>(&#this_lt self) -> &#this_lt #ty {
+                    // SAFETY: we have `SelfRef<..>` which we know is layout compatible with `f.ty`.
+                    // Field lifetimes in `f.ty` can be shortened to `#ty` due to covariance.
+                    unsafe { core::mem::transmute(&self.#member) }
+                }
+            ))
+        } else {
+            let f_doc = format!("Access the `{ident}` field on a shared reference of `Self`.");
+            let vis = &f.field.vis;
+            let with_ident = format_ident!("with_{ident}");
+
+            let all_lifetimes: Vec<_> = f.captures.iter().map(|b| &b.lifetime).collect();
+            let ty = &f.field.ty;
+
+            accessors.push(quote!(
+                #[doc = #f_doc]
+                #[inline]
+                #vis fn #with_ident<'__this, R>(&'__this self, f: impl for<#(#all_lifetimes,)*> ::core::ops::FnOnce(&'__this #ty) -> R) -> R {
+                    // SAFETY: `SelfRef` is layout compatible with `#ty`.
+                    f(unsafe { core::mem::transmute(&self.#ident) })
+                }
+            ))
+        }
+    }
+
+    let (fields_ref_decl_lt, fields_ref_proj_lt): (Vec<_>, Vec<_>) = info
+        .fields
+        .iter()
+        .filter(|f| {
+            // Mutably referenced fields cannot be accessed by user at all for aliasing reasons.
+            !matches!(
+                f.borrowed,
+                Some(BorrowedInfo {
+                    kind: BorrowedKind::Mutable,
+                    ..
+                })
+            )
+        })
+        .map(|f| {
+            let vis = &f.field.vis;
+            let ident = f.member.as_ident();
+            let member = &f.member;
+            let name = (!info.is_tuple_struct).then(|| quote!(#ident:));
+
+            let ty = &f.field.ty;
+
+            let mut accessor = quote!(&self.#member);
+            if !f.captures.is_empty() || f.borrowed.is_some() {
+                accessor = quote!(
+                    // SAFETY: we have `SelfRef<..>` which we know is layout compatible with `f.ty`.
+                    // We cannot include explicit type name here as the field lifetimes are nameable
+                    // in this context.
+                    unsafe { core::mem::transmute(#accessor) }
+                )
+            }
+
+            // In `with_project`, borrowed fields have their field lifetime available, so use it
+            // instead of `'__this`.
+            let lt = if f.borrowed.is_some() {
+                Lifetime::from_ident(&ident)
+            } else {
+                this_lt.clone()
+            };
+
+            if f.pinned {
+                (
+                    quote!(
+                        #vis #name ::core::pin::Pin<&#lt #ty>,
+                    ),
+                    quote!(
+                        // SAFETY: this field is structurally pinned.
+                        #name unsafe { ::core::pin::Pin::new_unchecked(#accessor) },
+                    ),
+                )
+            } else {
+                (
+                    quote!(
+                        #vis #name &#lt #ty,
+                    ),
+                    quote!(
+                        #name #accessor,
+                    ),
+                )
+            }
+        })
+        .collect();
+
+    let projection_ref_lt = format_ident!("__ProjectionRef");
+    let (projection_ref_lt_def, projection_ref_lt_init) = if info.is_tuple_struct {
+        (
+            quote!(
+                #vis struct #projection_ref_lt #generics_with_this_field_ref_lt(
+                    #(#fields_ref_decl_lt)*
+                    ::core::marker::PhantomData<&'__this ()>,
+                ) #whr;
+            ),
+            quote!(
+                #projection_ref_lt(
+                    #(#fields_ref_proj_lt)*
+                    ::core::marker::PhantomData,
+                )
+            ),
+        )
+    } else {
+        (
+            quote! {
+                #vis struct #projection_ref_lt #generics_with_this_field_ref_lt
+                    #whr
+                {
+                    #(#fields_ref_decl_lt)*
+                    ___pin_phantom_data: ::core::marker::PhantomData<&'__this ()>,
+                }
+            },
+            quote! {
+                #projection_ref_lt {
+                    #(#fields_ref_proj_lt)*
+                    ___pin_phantom_data: ::core::marker::PhantomData,
+                }
+            },
+        )
+    };
+
     quote! {
         #[doc = #docs]
         // Allow `non_snake_case` since the same warning will be emitted on
@@ -411,6 +1702,19 @@ fn generate_projections(
         #[allow(dead_code, non_snake_case)]
         #[doc(hidden)]
         #projection_def
+
+        #[doc = #docs]
+        // Allow `non_snake_case` since the same warning will be emitted on
+        // the struct definition.
+        #[allow(dead_code, non_snake_case)]
+        #[doc(hidden)]
+        #projection_lt_def
+
+        // Allow `non_snake_case` since the same warning will be emitted on
+        // the struct definition.
+        #[allow(dead_code, non_snake_case)]
+        #[doc(hidden)]
+        #projection_ref_lt_def
 
         impl #impl_generics #ident #ty_generics
             #whr
@@ -423,33 +1727,92 @@ fn generate_projections(
             /// These fields are **not** structurally pinned:
             #(#[doc = #not_structurally_pinned_fields_docs])*
             #[inline]
-            #vis fn project<'__pin>(
-                self: ::core::pin::Pin<&'__pin mut Self>,
-            ) -> #projection #ty_generics_with_pin_lt {
+            #vis fn project<'__this>(
+                self: ::core::pin::Pin<&'__this mut Self>,
+            ) -> __Projection #ty_generics_with_this_lt {
                 // SAFETY: we only give access to `&mut` for fields not structurally pinned.
                 let #this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
                 #projection_init
             }
+
+            /// Pin-projects all fields of `Self` with proper lifetime.
+            ///
+            /// These fields are structurally pinned:
+            #(#[doc = #structurally_pinned_fields_docs])*
+            ///
+            /// These fields are **not** structurally pinned:
+            #(#[doc = #not_structurally_pinned_fields_docs])*
+            #[inline]
+            #vis fn with_project<'__this, R>(
+                self: ::core::pin::Pin<&'__this mut Self>,
+                f: impl #field_lt_for_generics ::core::ops::FnOnce(#projection_lt #ty_generics_with_this_field_lt) -> R
+            ) -> R {
+                // SAFETY: we only give access to `&mut` for fields not structurally pinned.
+                let #this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
+                f(#projection_lt_init)
+            }
+
+            /// Pin-projects all fields of `Self` from a shared reference with proper lifetime.
+            ///
+            /// These fields are structurally pinned:
+            #(#[doc = #structurally_pinned_fields_docs])*
+            ///
+            /// These fields are **not** structurally pinned:
+            #(#[doc = #not_structurally_pinned_fields_docs])*
+            #vis fn with_project_ref<'__this, R>(
+                self: &'__this Self,
+                f: impl #field_lt_for_generics ::core::ops::FnOnce(#projection_ref_lt #ty_generics_with_this_field_ref_lt) -> R
+            ) -> R {
+                f(#projection_ref_lt_init)
+            }
+
+            #(#accessors)*
         }
     }
 }
 
 fn generate_the_pin_data(
-    vis: &Visibility,
-    struct_name: &Ident,
-    generics: &Generics,
-    fields: &[FieldInfo<'_>],
+    info: &StructInfo,
+    field_lt_generics: &Generics,
+    field_exist_lt_generics: &Generics,
 ) -> TokenStream {
-    let (impl_generics, ty_generics, whr) = generics.split_for_impl();
+    let ItemStruct {
+        vis,
+        ident: struct_name,
+        generics,
+        ..
+    } = &info.struct_;
 
-    // For every field, we create an initializing projection function according to its projection
-    // type. If a field is structurally pinned, we create a `Slot` with `Pinned` which must be
-    // initialized via `PinInit`; if it is not structurally pinned, then we create a `Slot` with
-    // `Unpinned` which allows initialization via `Init`.
-    let field_accessors = fields
+    let generics_with_field_lt = CombinedGenerics(vec![&field_exist_lt_generics, generics]);
+
+    let (impl_generics, ty_generics, whr) = generics.split_for_impl();
+    let field_lt_for_generics = field_lt_generics.for_generics();
+    let (impl_generics_with_lt, ty_generics_with_field_lt, _) =
+        generics_with_field_lt.split_for_impl();
+
+    // Wrap each field in a `PhantomInvariant`. For borrowed fields, additionally
+    // use `&#lt mut #ty` so the `lt` becomes associated with `#ty` which deduces
+    // implied bounds.
+    let phantom_fields = info.fields.iter().map(|f| {
+        let ty = &f.field.ty;
+        let ident = f.member.as_ident();
+
+        if let Some(borrowed) = &f.borrowed {
+            let lt = &borrowed.lifetime;
+            quote!(
+                #ident: ::pin_init::__internal::PhantomInvariant<&#lt mut #ty>,
+            )
+        } else {
+            quote!(
+                #ident: ::pin_init::__internal::PhantomInvariant<#ty>,
+            )
+        }
+    });
+
+    let field_accessors = info.fields
         .iter()
         .map(|f| {
-            let Field { vis, ty, .. } = f.field;
+            let Field { vis, ty, .. } = &f.field;
             let field_name = f.member.as_ident();
             let member = &f.member;
             let pin_marker = if f.pinned {
@@ -457,6 +1820,43 @@ fn generate_the_pin_data(
             } else {
                 quote!(Unpinned)
             };
+
+            let (slot_ty, slot_arg) = match &f.borrowed {
+                None => (quote!(Slot), quote!()),
+                Some(BorrowedInfo{ kind: BorrowedKind::Shared, lifetime, .. }) => (
+                    // For borrowed fields, create a `SelfRefSlot`, which after initialization
+                    // turns into a `SelfRefDropGuard` instead of `DropGuard`.
+                    //
+                    // They're mostly the same, except that `SelfRefDropGuard` returns `&'field T`
+                    // instead of `&'guard T` for let bindings; this allows it to be used to be
+                    // used to initialize other fields.
+                    //
+                    // The soundness of doing so relies on fact that `__make_init` requires a
+                    // higher-ranked trait bound on the closure. Within the closure (which is the
+                    // caller of the generated slot projection functions here), it can make no
+                    // assumptions on the lifetime except for those implied by the struct's bounds,
+                    // and we have validated them in `generate_drop_check`.
+                    quote!(SelfRefSlot),
+                    quote!(#lifetime, ::pin_init::__internal::Shared, ),
+                ),
+                Some(BorrowedInfo{ kind: BorrowedKind::Mutable, lifetime, .. }) => (
+                    // For borrowed fields, create a `SelfRefSlot`, which after initialization
+                    // turns into a `SelfRefDropGuard` instead of `DropGuard`.
+                    //
+                    // They're mostly the same, except that `SelfRefDropGuard` returns `&'field T`
+                    // instead of `&'guard T` for let bindings; this allows it to be used to be
+                    // used to initialize other fields.
+                    //
+                    // The soundness of doing so relies on fact that `__make_init` requires a
+                    // higher-ranked trait bound on the closure. Within the closure (which is the
+                    // caller of the generated slot projection functions here), it can make no
+                    // assumptions on the lifetime except for those implied by the struct's bounds,
+                    // and we have validated them in `generate_drop_check`.
+                    quote!(SelfRefSlot),
+                    quote!(#lifetime, ::pin_init::__internal::Mutable, ),
+                ),
+            };
+
             quote! {
                 /// # Safety
                 ///
@@ -471,19 +1871,52 @@ fn generate_the_pin_data(
                 #vis unsafe fn #field_name(
                     self,
                     slot: *mut #struct_name #ty_generics,
-                ) -> ::pin_init::__internal::Slot<::pin_init::__internal::#pin_marker, #ty> {
+                ) -> ::pin_init::__internal::#slot_ty<#slot_arg ::pin_init::__internal::#pin_marker, #ty> {
+                    // CAST: `as _` is needed to convert types wrapped inside `SelfRef`.
                     // SAFETY:
                     // - If `#pin_marker` is `Pinned`, the corresponding field is structurally
                     //   pinned.
                     // - Other safety requirements follows the safety requirement.
-                    unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot).#member) }
+                    // - If `#slot_ty` is `SelfRefSlot`, the lifetime `#lt` represents that of the
+                    //   field.
+                    unsafe { ::pin_init::__internal::#slot_ty::new(&raw mut (*slot).#member as _) }
                 }
             }
         })
         .collect::<TokenStream>();
+
+    let exist_lt_generics_params = info.exist_lt.params.iter();
     quote! {
-        // We declare this struct which will host all of the projection function for our type. It
-        // will be invariant over all generic parameters which are inherited from the struct.
+        // We declare this struct which will host all of the projection function for our type.
+        #[doc(hidden)]
+        #[allow(non_snake_case)]
+        #vis struct __PinDataLt #generics_with_field_lt
+            #whr
+        {
+            #(#phantom_fields)*
+        }
+
+        impl #impl_generics_with_lt ::core::clone::Clone for __PinDataLt #ty_generics_with_field_lt
+            #whr
+        {
+            fn clone(&self) -> Self { *self }
+        }
+
+        impl #impl_generics_with_lt ::core::marker::Copy for __PinDataLt #ty_generics_with_field_lt
+            #whr
+        {}
+
+        #[allow(dead_code)] // Some functions might never be used and private.
+        #[expect(clippy::missing_safety_doc)]
+        impl #impl_generics_with_lt __PinDataLt #ty_generics_with_field_lt
+            #whr
+        {
+            #field_accessors
+        }
+
+        // Declare a type that serves as the entry point of interaction with the `pin_init!` macro.
+        // We use this type instead of defining methods directly on user's type to avoid possibility
+        // of name conflicts.
         #[doc(hidden)]
         #vis struct __ThePinData #generics
             #whr
@@ -502,21 +1935,25 @@ fn generate_the_pin_data(
             #whr
         {}
 
-        #[allow(dead_code)] // Some functions might never be used and private.
         impl #impl_generics __ThePinData #ty_generics
             #whr
         {
             /// Type inference helper function.
             #[inline(always)]
-            #vis fn __make_closure<__F, __E>(self, f: __F) -> __F
+            #vis fn __make_closure<#(#exist_lt_generics_params,)* __F, __E>(self, f: __F) -> __F
             where
-                __F: FnOnce(*mut #struct_name #ty_generics) ->
+                __F: #field_lt_for_generics ::core::ops::FnOnce(*mut #struct_name #ty_generics, __PinDataLt #ty_generics_with_field_lt) ->
                     ::core::result::Result<::pin_init::__internal::InitOk, __E>,
             {
                 f
             }
 
-            #field_accessors
+            #[inline(always)]
+            #vis fn __with_lt #field_exist_lt_generics(self) -> __PinDataLt #ty_generics_with_field_lt {
+                // Generate a zeroed to avoid naming all fields.
+                // SAFETY: `__PinDataLt` only contains phantom fields.
+                unsafe { ::core::mem::zeroed() }
+            }
         }
 
         // SAFETY: We have added the correct projection functions above to `__ThePinData` and

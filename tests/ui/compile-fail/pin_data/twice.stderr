@@ -1,10 +1,49 @@
-error[E0428]: the name `FooProjection` is defined multiple times
+error[E0119]: conflicting implementations of trait `pin_init::__internal::HasPinData` for type `Foo`
  --> tests/ui/compile-fail/pin_data/twice.rs:4:1
   |
 3 | #[pin_data]
-  | ----------- previous definition of the type `FooProjection` here
+  | ----------- first implementation here
 4 | #[pin_data]
-  | ^^^^^^^^^^^ `FooProjection` redefined here
+  | ^^^^^^^^^^^ conflicting implementation for `Foo`
   |
-  = note: `FooProjection` must be defined only once in the type namespace of this module
+  = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0119]: conflicting implementations of trait `Unpin` for type `Foo`
+ --> tests/ui/compile-fail/pin_data/twice.rs:4:1
+  |
+3 | #[pin_data]
+  | ----------- first implementation here
+4 | #[pin_data]
+  | ^^^^^^^^^^^ conflicting implementation for `Foo`
+  |
+  = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `project`
+ --> tests/ui/compile-fail/pin_data/twice.rs:4:1
+  |
+3 | #[pin_data]
+  | ----------- other definition for `project`
+4 | #[pin_data]
+  | ^^^^^^^^^^^ duplicate definitions for `project`
+  |
+  = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `with_project`
+ --> tests/ui/compile-fail/pin_data/twice.rs:4:1
+  |
+3 | #[pin_data]
+  | ----------- other definition for `with_project`
+4 | #[pin_data]
+  | ^^^^^^^^^^^ duplicate definitions for `with_project`
+  |
+  = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0592]: duplicate definitions with name `with_project_ref`
+ --> tests/ui/compile-fail/pin_data/twice.rs:4:1
+  |
+3 | #[pin_data]
+  | ----------- other definition for `with_project_ref`
+4 | #[pin_data]
+  | ^^^^^^^^^^^ duplicate definitions for `with_project_ref`
+  |
   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
