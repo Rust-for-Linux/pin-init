@@ -171,9 +171,9 @@ fn main() {
                     >::new(&raw mut (*slot).2)
                 })
                     .init(10)?;
-                ::core::mem::forget(___0_guard);
-                ::core::mem::forget(___1_guard);
                 ::core::mem::forget(___2_guard);
+                ::core::mem::forget(___1_guard);
+                ::core::mem::forget(___0_guard);
                 #[allow(unreachable_code)]
                 let _ = || unsafe {
                     let _ = &(*slot).0;
@@ -229,9 +229,9 @@ fn main() {
                     >::new(&raw mut (*slot).2)
                 })
                     .write(20);
-                ::core::mem::forget(___0_guard);
-                ::core::mem::forget(___1_guard);
                 ::core::mem::forget(___2_guard);
+                ::core::mem::forget(___1_guard);
+                ::core::mem::forget(___0_guard);
                 #[allow(unreachable_code)]
                 let _ = || unsafe {
                     let _ = &(*slot).0;
