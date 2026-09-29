@@ -16,6 +16,16 @@ struct SelfRef<'a> {
     outer: &'a String,
 }
 
+// Similar one to the above, but make use of `exists`.
+#[pin_data]
+struct ExistsOwner<'a>
+where
+    exists<'x>: 'a,
+{
+    part: PrintOnDrop<&'outer String>,
+    outer: &'x String,
+}
+
 fn new<'a>(str: &'a String) -> impl PinInit<SelfRef<'a>, Infallible> {
     pin_init!(SelfRef {
         outer: str,
@@ -23,8 +33,16 @@ fn new<'a>(str: &'a String) -> impl PinInit<SelfRef<'a>, Infallible> {
     })
 }
 
+fn new_exists<'a>(s: &'a String) -> impl PinInit<ExistsOwner<'a>, Infallible> {
+    pin_init!(ExistsOwner {
+        outer: s,
+        part: PrintOnDrop(*outer),
+    })
+}
+
 fn main() {
     let str = "hello world".to_owned();
     let _selfref = Box::pin_init(new(&str)).unwrap();
+    let _selfref_exists = Box::pin_init(new_exists(&str)).unwrap();
     drop(str);
 }

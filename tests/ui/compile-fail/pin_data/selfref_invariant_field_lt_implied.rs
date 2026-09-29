@@ -31,6 +31,27 @@ where
     foo
 }
 
+// Rejected by split variance chain. Could technically be allowed.
+// `&'early &'later ()` is well-formed only when `'later` outlives the invariant `'early`.
+#[pin_data]
+struct SplitVarianceChain {
+    link: &'early &'later (),
+    #[uses('early: invariant)]
+    slot: Mutex<&'early str>,
+    early: String,
+    later: String,
+}
+
+// Rejected by split variance chain. Must not be allowed.
+// `&'early &'a ()` is well-formed only when `'a` outlives the invariant `'early`.
+#[pin_data]
+struct SplitVarianceChainWithGeneric<'a> {
+    link: &'early &'a (),
+    #[uses('early: invariant)]
+    slot: Mutex<&'early str>,
+    early: String,
+}
+
 fn main() {
     stack_pin_init!(let foo = pin_init!(Foo {
         early: "early".to_owned(),

@@ -3,6 +3,12 @@
 use pin_init::*;
 
 #[pin_data]
+struct Foo {
+    #[borrowed]
+    f: u32,
+}
+
+#[pin_data]
 struct Bar {
     b: &'f u32,
     f: u32,
@@ -10,7 +16,7 @@ struct Bar {
 
 #[pin_data]
 struct Baz {
-    b: &'f u32,
+    #[borrowed]
     f: u32,
 }
 
@@ -21,5 +27,6 @@ fn assert_unpin<T: Unpin>() {}
 
 fn main() {
     // All of the below checks must fail.
+    assert_unpin::<Foo>();
     assert_unpin::<Bar>();
 }
