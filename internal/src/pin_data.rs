@@ -325,11 +325,11 @@ fn generate_projections(
     is_tuple_struct: bool,
     fields: &[FieldInfo<'_>],
 ) -> TokenStream {
-    let pin_lt_generics: Generics = parse_quote!(<'__pin>);
-    let generics_with_pin_lt = CombinedGenerics(vec![&pin_lt_generics, generics]);
+    let this_lt_generics: Generics = parse_quote!(<'__this>);
+    let generics_with_this_lt = CombinedGenerics(vec![&this_lt_generics, generics]);
 
     let (impl_generics, ty_generics, whr) = generics.split_for_impl();
-    let (_, ty_generics_with_pin_lt, _) = generics_with_pin_lt.split_for_impl();
+    let (_, ty_generics_with_this_lt, _) = generics_with_this_lt.split_for_impl();
 
     let this = format_ident!("this");
 
@@ -348,7 +348,7 @@ fn generate_projections(
             if field.pinned {
                 (
                     quote!(
-                        #vis #name ::core::pin::Pin<&'__pin mut #ty>,
+                        #vis #name ::core::pin::Pin<&'__this mut #ty>,
                     ),
                     quote!(
                         // SAFETY: this field is structurally pinned.
@@ -358,7 +358,7 @@ fn generate_projections(
             } else {
                 (
                     quote!(
-                        #vis #name &'__pin mut #ty,
+                        #vis #name &'__this mut #ty,
                     ),
                     quote!(
                         #name &mut #this.#member,
@@ -379,9 +379,9 @@ fn generate_projections(
     let (projection_def, projection_init) = if is_tuple_struct {
         (
             quote! {
-                #vis struct __Projection #generics_with_pin_lt (
+                #vis struct __Projection #generics_with_this_lt (
                     #(#fields_decl)*
-                    ::core::marker::PhantomData<&'__pin mut ()>,
+                    ::core::marker::PhantomData<&'__this mut #ident #ty_generics>,
                 ) #whr;
             },
             quote! {
@@ -394,17 +394,17 @@ fn generate_projections(
     } else {
         (
             quote! {
-                #vis struct __Projection #generics_with_pin_lt
+                #vis struct __Projection #generics_with_this_lt
                     #whr
                 {
                     #(#fields_decl)*
-                    ___pin_phantom_data: ::core::marker::PhantomData<&'__pin mut ()>,
+                    __this: ::core::marker::PhantomData<&'__this mut #ident #ty_generics>,
                 }
             },
             quote! {
                 __Projection {
                     #(#fields_proj)*
-                    ___pin_phantom_data: ::core::marker::PhantomData,
+                    __this: ::core::marker::PhantomData,
                 }
             },
         )
@@ -428,9 +428,9 @@ fn generate_projections(
             /// These fields are **not** structurally pinned:
             #(#[doc = #not_structurally_pinned_fields_docs])*
             #[inline]
-            #vis fn project<'__pin>(
-                self: ::core::pin::Pin<&'__pin mut Self>,
-            ) -> __Projection #ty_generics_with_pin_lt {
+            #vis fn project<'__this>(
+                self: ::core::pin::Pin<&'__this mut Self>,
+            ) -> __Projection #ty_generics_with_this_lt {
                 // SAFETY: we only give access to `&mut` for fields not structurally pinned.
                 let #this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
                 #projection_init

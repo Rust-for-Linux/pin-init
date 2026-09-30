@@ -5,11 +5,11 @@ const _: () = {
     /// Pin-projections of [`Foo`]
     #[allow(dead_code, non_snake_case)]
     #[doc(hidden)]
-    struct __Projection<'__pin, 'a, T: Copy, const N: usize>(
-        &'__pin mut &'a mut [T; N],
-        ::core::pin::Pin<&'__pin mut PhantomPinned>,
-        &'__pin mut usize,
-        ::core::marker::PhantomData<&'__pin mut ()>,
+    struct __Projection<'__this, 'a, T: Copy, const N: usize>(
+        &'__this mut &'a mut [T; N],
+        ::core::pin::Pin<&'__this mut PhantomPinned>,
+        &'__this mut usize,
+        ::core::marker::PhantomData<&'__this mut Foo<'a, T, N>>,
     );
     impl<'a, T: Copy, const N: usize> Foo<'a, T, N> {
         /// Pin-projects all fields of `Self`.
@@ -21,9 +21,9 @@ const _: () = {
         /// - index `0`
         /// - index `2`
         #[inline]
-        fn project<'__pin>(
-            self: ::core::pin::Pin<&'__pin mut Self>,
-        ) -> __Projection<'__pin, 'a, T, N> {
+        fn project<'__this>(
+            self: ::core::pin::Pin<&'__this mut Self>,
+        ) -> __Projection<'__this, 'a, T, N> {
             let this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
             __Projection(
                 &mut this.0,
