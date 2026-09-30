@@ -101,7 +101,7 @@ enum InitializerKind {
     },
     Init {
         member: Member,
-        _left_arrow_token: Token![<-],
+        left_arrow_token: Token![<-],
         value: Expr,
     },
     Code {
@@ -415,24 +415,38 @@ fn init_fields(fields: &Punctuated<InitializerField, Token![,]>, pinned: bool) -
 
         // `mixed_site` ensures that the guard is not accessible to the user-controlled code.
         let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
-        let full_span = kind.span();
+        let full_span = kind.span().resolved_at(Span::mixed_site());
 
         let init = match kind {
             InitializerKind::Value { value, .. } => {
-                let value = value
+                let (colon_span, value) = value
                     .as_ref()
-                    .map(|(_, value)| quote!(#value))
-                    .unwrap_or_else(|| quote!(#member));
+                    .map(|(colon_token, value)| (colon_token.span(), quote!(#value)))
+                    .unwrap_or_else(|| (member.span(), quote!(#member)));
+
+                // Use `:` as the span of the method name, so the type requirement appears to come from `:`.
+                let write =
+                    format_ident!("write", span = colon_span.resolved_at(Span::mixed_site()));
 
                 quote_spanned! { full_span =>
                     #(#attrs)*
-                    let mut #guard = #slot.write(#value);
+                    let mut #guard = #slot.#write(#value);
                 }
             }
-            InitializerKind::Init { value, .. } => {
+            InitializerKind::Init {
+                value,
+                left_arrow_token,
+                ..
+            } => {
+                // Use `<-` as the span of the method name, so the trait bound appears to come from `<-`.
+                let init = format_ident!(
+                    "init",
+                    span = left_arrow_token.span().resolved_at(Span::mixed_site())
+                );
+
                 quote_spanned! { full_span =>
                     #(#attrs)*
-                    let mut #guard = #slot.init(#value)?;
+                    let mut #guard = #slot.#init(#value)?;
                 }
             }
             InitializerKind::Code { .. } => unreachable!(),
@@ -477,42 +491,61 @@ fn make_field_check(
     init_kind: InitKind,
     path: &Path,
 ) -> TokenStream {
-    let field_attrs: Vec<_> = fields
+    let align_checks: TokenStream = fields
         .iter()
-        .filter_map(|f| f.kind.member().map(|_| &f.attrs))
+        .filter_map(|f| {
+            let member = f.kind.member()?;
+            let span = member.span().resolved_at(Span::mixed_site());
+            let attrs = &f.attrs;
+
+            Some(quote_spanned! {span =>
+                // Create references to ensure that the initialized field is properly aligned.
+                // Unaligned fields will cause the compiler to emit E0793. We do not support
+                // unaligned fields since `Init::__init` requires an aligned pointer; the call to
+                // `ptr::write` for value-initialization case has the same requirement.
+                #(#attrs)*
+                let _ = &(*slot).#member;
+            })
+        })
         .collect();
-    let field_name: Vec<_> = fields.iter().filter_map(|f| f.kind.member()).collect();
+
+    let fake_field_init: TokenStream = fields
+        .iter()
+        .filter_map(|f| {
+            let member = f.kind.member()?;
+            let span = member.span().resolved_at(Span::mixed_site());
+            let attrs = &f.attrs;
+
+            Some(quote_spanned! {span =>
+                #(#attrs)*
+                #member: loop {},
+            })
+        })
+        .collect();
     let zeroing_trailer = match init_kind {
         InitKind::Normal => None,
         InitKind::Zeroing => Some(quote! {
             ..::core::mem::zeroed()
         }),
     };
+    let field_dup_checks = quote_spanned! { Span::mixed_site() =>
+        // If the zeroing trailer is not present, this checks that all fields have been
+        // mentioned exactly once. If the zeroing trailer is present, all missing fields will be
+        // zeroed, so this checks that all fields have been mentioned at most once. The use of
+        // struct initializer will still generate very natural error messages for any misuse.
+        ::core::ptr::write(slot, #path {
+            #fake_field_init
+            #zeroing_trailer
+        })
+    };
+
     quote_spanned! { Span::mixed_site() =>
         #[allow(unreachable_code)]
         // We use unreachable code to perform field checks. They're still checked by the compiler.
         // SAFETY: this code is never executed.
         let _ = || unsafe {
-            // Create references to ensure that the initialized field is properly aligned.
-            // Unaligned fields will cause the compiler to emit E0793. We do not support
-            // unaligned fields since `Init::__init` requires an aligned pointer; the call to
-            // `ptr::write` for value-initialization case has the same requirement.
-            #(
-                #(#field_attrs)*
-                let _ = &(*slot).#field_name;
-            )*
-
-            // If the zeroing trailer is not present, this checks that all fields have been
-            // mentioned exactly once. If the zeroing trailer is present, all missing fields will be
-            // zeroed, so this checks that all fields have been mentioned at most once. The use of
-            // struct initializer will still generate very natural error messages for any misuse.
-            ::core::ptr::write(slot, #path {
-                #(
-                    #(#field_attrs)*
-                    #field_name: loop {},
-                )*
-                #zeroing_trailer
-            })
+            #align_checks
+            #field_dup_checks
         };
     }
 }
@@ -670,7 +703,7 @@ impl Parse for InitializerKind {
         if lh.peek(Token![<-]) {
             Ok(Self::Init {
                 member,
-                _left_arrow_token: input.parse()?,
+                left_arrow_token: input.parse()?,
                 value: input.parse()?,
             })
         } else if lh.peek(Token![:]) {
@@ -799,11 +832,11 @@ impl ToTokens for InitializerKind {
             }
             Self::Init {
                 member,
-                _left_arrow_token,
+                left_arrow_token,
                 value,
             } => {
                 member.to_tokens(tokens);
-                _left_arrow_token.to_tokens(tokens);
+                left_arrow_token.to_tokens(tokens);
                 value.to_tokens(tokens);
             }
             Self::Code {
