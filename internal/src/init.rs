@@ -424,7 +424,8 @@ fn init_fields(fields: &Punctuated<InitializerField, Token![,]>, pinned: bool) -
                     .map(|(colon_token, value)| (colon_token.span(), quote!(#value)))
                     .unwrap_or_else(|| (member.span(), quote!(#member)));
 
-                // Use `:` as the span of the method name, so the type requirement appears to come from `:`.
+                // Use `:` as the span of the method name, so the type requirement appears to come
+                // from `:`.
                 let write =
                     format_ident!("write", span = colon_span.resolved_at(Span::mixed_site()));
 
@@ -438,7 +439,8 @@ fn init_fields(fields: &Punctuated<InitializerField, Token![,]>, pinned: bool) -
                 left_arrow_token,
                 ..
             } => {
-                // Use `<-` as the span of the method name, so the trait bound appears to come from `<-`.
+                // Use `<-` as the span of the method name, so the trait bound appears to come from
+                // `<-`.
                 let init = format_ident!(
                     "init",
                     span = left_arrow_token.span().resolved_at(Span::mixed_site())
