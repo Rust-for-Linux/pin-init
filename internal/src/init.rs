@@ -413,7 +413,7 @@ fn init_fields(fields: &Punctuated<InitializerField, Token![,]>, pinned: bool) -
         };
 
         // `mixed_site` ensures that the guard is not accessible to the user-controlled code.
-        let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
+        let guard = format_ident!("__{ident}_guard", span = span);
         let full_span = kind.span().resolved_at(Span::mixed_site());
 
         let init = match kind {
