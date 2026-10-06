@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Merged `__pinned_init` with `__init`. Neither methods are recommended to be
   used directly to initialize raw slots; `pin_init::raw_[try_]init` should be
   used instead.
+- `derive(Zeroable)` on unions now only requires one field to implement
+  `Zeroable`.
 
 ### Removed
 
