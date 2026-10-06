@@ -1,0 +1,13 @@
+error[E0277]: no field type of this union implements `Zeroable`
+ --> tests/ui/compile-fail/zeroable/union_no_zeroable_field.rs:4:10
+  |
+4 | #[derive(Zeroable)]
+  |          ^^^^^^^^ the trait `pin_init::__internal::IsTrue` is not implemented for `pin_init::__internal::False`
+  |
+  = note: at least one field type must implement `Zeroable`
+note: required by a bound in `assert_zeroable_any`
+ --> tests/ui/compile-fail/zeroable/union_no_zeroable_field.rs:4:10
+  |
+4 | #[derive(Zeroable)]
+  |          ^^^^^^^^ required by this bound in `assert_zeroable_any`
+  = note: this error originates in the derive macro `Zeroable` (in Nightly builds, run with -Z macro-backtrace for more info)
