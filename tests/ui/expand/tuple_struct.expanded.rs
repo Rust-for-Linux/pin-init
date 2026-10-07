@@ -1,38 +1,38 @@
 use core::marker::PhantomPinned;
 use pin_init::*;
 struct Foo<'a, T: Copy, const N: usize>(&'a mut [T; N], PhantomPinned, usize);
-/// Pin-projections of [`Foo`]
-#[allow(dead_code, non_snake_case)]
-#[doc(hidden)]
-struct FooProjection<'__pin, 'a, T: Copy, const N: usize>(
-    &'__pin mut &'a mut [T; N],
-    ::core::pin::Pin<&'__pin mut PhantomPinned>,
-    &'__pin mut usize,
-    ::core::marker::PhantomData<&'__pin mut ()>,
-);
-impl<'a, T: Copy, const N: usize> Foo<'a, T, N> {
-    /// Pin-projects all fields of `Self`.
-    ///
-    /// These fields are structurally pinned:
-    /// - index `1`
-    ///
-    /// These fields are **not** structurally pinned:
-    /// - index `0`
-    /// - index `2`
-    #[inline]
-    fn project<'__pin>(
-        self: ::core::pin::Pin<&'__pin mut Self>,
-    ) -> FooProjection<'__pin, 'a, T, N> {
-        let this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
-        FooProjection(
-            &mut this.0,
-            unsafe { ::core::pin::Pin::new_unchecked(&mut this.1) },
-            &mut this.2,
-            ::core::marker::PhantomData,
-        )
-    }
-}
 const _: () = {
+    /// Pin-projections of [`Foo`]
+    #[allow(dead_code, non_snake_case)]
+    #[doc(hidden)]
+    struct __Projection<'__this, 'a, T: Copy, const N: usize>(
+        &'__this mut &'a mut [T; N],
+        ::core::pin::Pin<&'__this mut PhantomPinned>,
+        &'__this mut usize,
+        ::core::marker::PhantomData<&'__this mut Foo<'a, T, N>>,
+    );
+    impl<'a, T: Copy, const N: usize> Foo<'a, T, N> {
+        /// Pin-projects all fields of `Self`.
+        ///
+        /// These fields are structurally pinned:
+        /// - index `1`
+        ///
+        /// These fields are **not** structurally pinned:
+        /// - index `0`
+        /// - index `2`
+        #[inline]
+        fn project<'__this>(
+            self: ::core::pin::Pin<&'__this mut Self>,
+        ) -> __Projection<'__this, 'a, T, N> {
+            let this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
+            __Projection(
+                &mut this.0,
+                unsafe { ::core::pin::Pin::new_unchecked(&mut this.1) },
+                &mut this.2,
+                ::core::marker::PhantomData,
+            )
+        }
+    }
     #[doc(hidden)]
     struct __ThePinData<'a, T: Copy, const N: usize> {
         __phantom: ::pin_init::__internal::PhantomInvariant<Foo<'a, T, N>>,
@@ -171,9 +171,9 @@ fn main() {
                     >::new(&raw mut (*slot).2)
                 })
                     .init(10)?;
-                ::core::mem::forget(___0_guard);
-                ::core::mem::forget(___1_guard);
                 ::core::mem::forget(___2_guard);
+                ::core::mem::forget(___1_guard);
+                ::core::mem::forget(___0_guard);
                 #[allow(unreachable_code)]
                 let _ = || unsafe {
                     let _ = &(*slot).0;
@@ -229,9 +229,9 @@ fn main() {
                     >::new(&raw mut (*slot).2)
                 })
                     .write(20);
-                ::core::mem::forget(___0_guard);
-                ::core::mem::forget(___1_guard);
                 ::core::mem::forget(___2_guard);
+                ::core::mem::forget(___1_guard);
+                ::core::mem::forget(___0_guard);
                 #[allow(unreachable_code)]
                 let _ = || unsafe {
                     let _ = &(*slot).0;

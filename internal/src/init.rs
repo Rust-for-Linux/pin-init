@@ -361,8 +361,7 @@ fn get_init_kind(rest: Option<(Token![..], Expr)>, dcx: &mut DiagCtxt) -> InitKi
 
 /// Generate the code that initializes the fields of the struct using the initializers in `field`.
 fn init_fields(fields: &Punctuated<InitializerField, Token![,]>, pinned: bool) -> TokenStream {
-    let mut guards = vec![];
-    let mut guard_attrs = vec![];
+    let mut forget_guards = vec![];
     let mut res = TokenStream::new();
     for InitializerField { attrs, kind } in fields {
         let cfgs = {
@@ -414,7 +413,7 @@ fn init_fields(fields: &Punctuated<InitializerField, Token![,]>, pinned: bool) -
         };
 
         // `mixed_site` ensures that the guard is not accessible to the user-controlled code.
-        let guard = format_ident!("__{ident}_guard", span = Span::mixed_site());
+        let guard = format_ident!("__{ident}_guard", span = span);
         let full_span = kind.span().resolved_at(Span::mixed_site());
 
         let init = match kind {
@@ -474,17 +473,19 @@ fn init_fields(fields: &Punctuated<InitializerField, Token![,]>, pinned: bool) -
             #binding
         });
 
-        guards.push(guard);
-        guard_attrs.push(cfgs);
+        forget_guards.push(quote_spanned! { span =>
+            #(#cfgs)*
+            ::core::mem::forget(#guard);
+        });
     }
+
+    forget_guards.reverse();
+
     quote! {
         #res
         // If execution reaches this point, all fields have been initialized. Therefore we can now
         // dismiss the guards by forgetting them.
-        #(
-            #(#guard_attrs)*
-            ::core::mem::forget(#guards);
-        )*
+        #(#forget_guards)*
     }
 }
 
