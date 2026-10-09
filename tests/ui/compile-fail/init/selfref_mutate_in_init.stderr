@@ -1,0 +1,26 @@
+error[E0505]: cannot move out of value because it is borrowed
+  --> tests/ui/compile-fail/init/selfref_mutate_in_init.rs:33:9
+   |
+32 |         part: Mutex::new(PrintOnDrop("")),
+   |         ---- borrow later used here
+33 |         early: "hello world".to_owned(),
+   |         ^^^^^
+   |         |
+   |         move out of value occurs here
+   |         borrow of value occurs here
+   |
+   = note: this error originates in the macro `pin_init` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0505]: cannot move out of value because it is borrowed
+  --> tests/ui/compile-fail/init/selfref_mutate_in_init.rs:47:9
+   |
+45 |         part: Mutex::new(PrintOnDrop("")),
+   |         ---- borrow later used here
+46 |         later: "later".to_owned(),
+47 |         early: "early".to_owned(),
+   |         ^^^^^
+   |         |
+   |         move out of value occurs here
+   |         borrow of value occurs here
+   |
+   = note: this error originates in the macro `pin_init` (in Nightly builds, run with -Z macro-backtrace for more info)

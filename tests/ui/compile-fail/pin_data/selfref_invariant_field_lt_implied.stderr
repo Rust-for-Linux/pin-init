@@ -1,0 +1,66 @@
+error: lifetime may not live long enough
+  --> tests/ui/compile-fail/pin_data/selfref_invariant_field_lt_implied.rs:20:13
+   |
+15 | #[pin_data]
+   | ----------- in this attribute macro expansion
+...
+20 |     marker: PhantomData<&'early &'later ()>,
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ requires that `'later` must outlive `'early`
+...
+23 |     early: String,
+   |     ----- lifetime `'early` defined here
+24 |     later: &'a str,
+   |     ----- lifetime `'later` defined here
+   |
+   = help: consider adding the following bound: `'later: 'early`
+   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: lifetime may not live long enough
+  --> tests/ui/compile-fail/pin_data/selfref_invariant_field_lt_implied.rs:20:13
+   |
+15 | #[pin_data]
+   | ----------- in this attribute macro expansion
+16 | struct Foo<'a> {
+   |            -- lifetime `'a` defined here
+...
+20 |     marker: PhantomData<&'early &'later ()>,
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ requires that `'a` must outlive `'early`
+...
+23 |     early: String,
+   |     ----- lifetime `'early` defined here
+   |
+   = help: consider adding the following bound: `'a: 'early`
+   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: lifetime may not live long enough
+  --> tests/ui/compile-fail/pin_data/selfref_invariant_field_lt_implied.rs:38:11
+   |
+36 | #[pin_data]
+   | ----------- in this attribute macro expansion
+37 | struct SplitVarianceChain {
+38 |     link: &'early &'later (),
+   |           ^^^^^^^^^^^^^^^^^^ requires that `'later` must outlive `'early`
+...
+41 |     early: String,
+   |     ----- lifetime `'early` defined here
+42 |     later: String,
+   |     ----- lifetime `'later` defined here
+   |
+   = help: consider adding the following bound: `'later: 'early`
+   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: lifetime may not live long enough
+  --> tests/ui/compile-fail/pin_data/selfref_invariant_field_lt_implied.rs:49:11
+   |
+47 | #[pin_data]
+   | ----------- in this attribute macro expansion
+48 | struct SplitVarianceChainWithGeneric<'a> {
+   |                                      -- lifetime `'a` defined here
+49 |     link: &'early &'a (),
+   |           ^^^^^^^^^^^^^^ requires that `'a` must outlive `'early`
+...
+52 |     early: String,
+   |     ----- lifetime `'early` defined here
+   |
+   = help: consider adding the following bound: `'a: 'early`
+   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -1,0 +1,15 @@
+error[E0597]: `local` does not live long enough
+  --> tests/ui/compile-fail/pin_data/selfref_with_project.rs:22:23
+   |
+20 |     let local = "hello world".to_owned();
+   |         ----- binding `local` declared here
+21 |     foo.as_mut().with_project(|proj| {
+   |                               ------ value captured here
+22 |         *proj.part = &local;
+   |         --------------^^^^^
+   |         |             |
+   |         |             borrowed value does not live long enough
+   |         assignment requires that `local` is borrowed for `'static`
+23 |     });
+24 | }
+   | - `local` dropped here while still borrowed

@@ -13,6 +13,21 @@ const _: () = {
         _pin: ::core::pin::Pin<&'__this mut PhantomPinned>,
         __this: ::core::marker::PhantomData<&'__this mut Foo>,
     }
+    /// Pin-projections of [`Foo`]
+    #[allow(dead_code, non_snake_case)]
+    #[doc(hidden)]
+    struct __ProjectionLt<'__this> {
+        array: &'__this mut [u8; 1024 * 1024],
+        _pin: ::core::pin::Pin<&'__this mut PhantomPinned>,
+        ___pin_phantom_data: ::core::marker::PhantomData<&'__this mut Foo>,
+    }
+    #[allow(dead_code, non_snake_case)]
+    #[doc(hidden)]
+    struct __ProjectionRef<'__this> {
+        array: &'__this [u8; 1024 * 1024],
+        _pin: ::core::pin::Pin<&'__this PhantomPinned>,
+        ___pin_phantom_data: ::core::marker::PhantomData<&'__this Foo>,
+    }
     impl Foo {
         /// Pin-projects all fields of `Self`.
         ///
@@ -32,30 +47,61 @@ const _: () = {
                 __this: ::core::marker::PhantomData,
             }
         }
+        /// Pin-projects all fields of `Self` with proper lifetime.
+        ///
+        /// These fields are structurally pinned:
+        /// - `_pin`
+        ///
+        /// These fields are **not** structurally pinned:
+        /// - `array`
+        #[inline]
+        fn with_project<'__this, R>(
+            self: ::core::pin::Pin<&'__this mut Self>,
+            f: impl ::core::ops::FnOnce(__ProjectionLt<'__this>) -> R,
+        ) -> R {
+            let this = unsafe { ::core::pin::Pin::get_unchecked_mut(self) };
+            f(__ProjectionLt {
+                array: &mut this.array,
+                _pin: unsafe { ::core::pin::Pin::new_unchecked(&mut this._pin) },
+                ___pin_phantom_data: ::core::marker::PhantomData,
+            })
+        }
+        /// Pin-projects all fields of `Self` from a shared reference with proper lifetime.
+        ///
+        /// These fields are structurally pinned:
+        /// - `_pin`
+        ///
+        /// These fields are **not** structurally pinned:
+        /// - `array`
+        #[inline]
+        fn with_project_ref<'__this, R>(
+            self: ::core::pin::Pin<&'__this Self>,
+            f: impl ::core::ops::FnOnce(__ProjectionRef<'__this>) -> R,
+        ) -> R {
+            let this = ::core::pin::Pin::get_ref(self);
+            f(__ProjectionRef {
+                array: &this.array,
+                _pin: unsafe { ::core::pin::Pin::new_unchecked(&this._pin) },
+                ___pin_phantom_data: ::core::marker::PhantomData,
+            })
+        }
     }
     #[doc(hidden)]
-    struct __ThePinData {
-        __phantom: ::pin_init::__internal::PhantomInvariant<Foo>,
+    #[allow(non_snake_case)]
+    struct __PinDataLt {
+        array: ::pin_init::__internal::PhantomInvariant<[u8; 1024 * 1024]>,
+        _pin: ::pin_init::__internal::PhantomInvariant<PhantomPinned>,
+        __pin_phantom: ::core::marker::PhantomData<Foo>,
     }
-    impl ::core::clone::Clone for __ThePinData {
-        #[inline]
+    impl ::core::clone::Clone for __PinDataLt {
         fn clone(&self) -> Self {
             *self
         }
     }
-    impl ::core::marker::Copy for __ThePinData {}
+    impl ::core::marker::Copy for __PinDataLt {}
     #[allow(dead_code)]
-    impl __ThePinData {
-        /// Type inference helper function.
-        #[inline(always)]
-        fn __make_closure<__F, __E>(self, f: __F) -> __F
-        where
-            __F: FnOnce(
-                *mut Foo,
-            ) -> ::core::result::Result<::pin_init::__internal::InitOk, __E>,
-        {
-            f
-        }
+    #[expect(clippy::missing_safety_doc)]
+    impl __PinDataLt {
         /// # Safety
         ///
         /// - `slot` is valid and properly aligned.
@@ -71,7 +117,7 @@ const _: () = {
             ::pin_init::__internal::Unpinned,
             [u8; 1024 * 1024],
         > {
-            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot).array) }
+            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot).array as _) }
         }
         /// # Safety
         ///
@@ -88,7 +134,35 @@ const _: () = {
             ::pin_init::__internal::Pinned,
             PhantomPinned,
         > {
-            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot)._pin) }
+            unsafe { ::pin_init::__internal::Slot::new(&raw mut (*slot)._pin as _) }
+        }
+    }
+    #[doc(hidden)]
+    struct __ThePinData {
+        __phantom: ::pin_init::__internal::PhantomInvariant<Foo>,
+    }
+    impl ::core::clone::Clone for __ThePinData {
+        #[inline]
+        fn clone(&self) -> Self {
+            *self
+        }
+    }
+    impl ::core::marker::Copy for __ThePinData {}
+    impl __ThePinData {
+        /// Type inference helper function.
+        #[inline(always)]
+        fn __make_closure<__F, __E>(self, f: __F) -> __F
+        where
+            __F: ::core::ops::FnOnce(
+                *mut Foo,
+                __PinDataLt,
+            ) -> ::core::result::Result<::pin_init::__internal::InitOk, __E>,
+        {
+            f
+        }
+        #[inline(always)]
+        fn __with_lt(self) -> __PinDataLt {
+            unsafe { ::core::mem::zeroed() }
         }
     }
     unsafe impl ::pin_init::__internal::HasPinData for Foo {
