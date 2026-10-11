@@ -54,3 +54,19 @@ where
     T: for<'__dummy> ::pin_init::Zeroable,
     &'a U: for<'__dummy> ::pin_init::Zeroable,
 {}
+union Union {
+    a: usize,
+    b: &'static usize,
+}
+#[automatically_derived]
+unsafe impl ::pin_init::Zeroable for Union {}
+const _: () = {
+    use ::pin_init::__internal::ZeroableCheckFallback as _;
+    fn assert_zeroable_any<T: ::pin_init::__internal::IsTrue>(_: T) {}
+    fn ensure_zeroable() {
+        assert_zeroable_any(
+            ::pin_init::__internal::ZeroableCheck::<usize>::new().check()
+                | ::pin_init::__internal::ZeroableCheck::<&'static usize>::new().check(),
+        );
+    }
+};

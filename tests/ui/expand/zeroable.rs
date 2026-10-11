@@ -25,3 +25,9 @@ struct WithGenericsMaybe<'a, T, U: Trait> {
     a: T,
     u: &'a U,
 }
+
+#[derive(Zeroable)]
+union Union {
+    a: usize,
+    b: &'static usize,
+}

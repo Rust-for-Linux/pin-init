@@ -63,3 +63,45 @@ fn zeroed_option_generic_compile_check() {
     assert_zeroable_option::<NonNull<u8>>();
     assert_zeroable_option::<NonZeroU8>();
 }
+
+#[allow(dead_code)]
+#[derive(Zeroable)]
+union Mixed {
+    a: usize,
+    b: &'static usize,
+}
+
+#[test]
+fn zeroed_union_with_one_zeroable_field() {
+    let value: Mixed = zeroed();
+    // SAFETY: `a` is the field written by zeroing and `usize` accepts all bit patterns.
+    assert_eq!(unsafe { value.a }, 0);
+}
+
+#[allow(dead_code)]
+#[derive(Zeroable)]
+union AllZeroable {
+    a: usize,
+    b: u8,
+}
+
+#[test]
+fn zeroed_union_with_all_fields_zeroable() {
+    let value: AllZeroable = zeroed();
+    // SAFETY: `a` is the field written by zeroing and `usize` accepts all bit patterns.
+    assert_eq!(unsafe { value.a }, 0);
+}
+
+#[allow(dead_code)]
+#[derive(Zeroable)]
+union Generic<T: Copy> {
+    a: T,
+    b: &'static usize,
+}
+
+fn assert_zeroable<T: Zeroable>() {}
+
+#[test]
+fn zeroed_generic_union_compile_check() {
+    assert_zeroable::<Generic<usize>>();
+}

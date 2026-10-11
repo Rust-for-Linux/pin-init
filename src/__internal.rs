@@ -385,3 +385,90 @@ unsafe impl<T: ?Sized> PinInit<T, ()> for AlwaysFail<T> {
         Err(())
     }
 }
+
+/// Type-level `true`, used by [`ZeroableCheck`].
+pub struct True;
+
+/// Type-level `false`, used by [`ZeroableCheck`].
+pub struct False;
+
+impl core::ops::BitOr<True> for True {
+    type Output = True;
+
+    fn bitor(self, _: True) -> True {
+        True
+    }
+}
+
+impl core::ops::BitOr<False> for True {
+    type Output = True;
+
+    fn bitor(self, _: False) -> True {
+        True
+    }
+}
+
+impl core::ops::BitOr<True> for False {
+    type Output = True;
+
+    fn bitor(self, _: True) -> True {
+        True
+    }
+}
+
+impl core::ops::BitOr<False> for False {
+    type Output = False;
+
+    fn bitor(self, _: False) -> False {
+        False
+    }
+}
+
+/// Asserts that a [`ZeroableCheck`] result is [`True`].
+#[diagnostic::on_unimplemented(
+    message = "no field type of this union implements `Zeroable`",
+    note = "at least one field type must implement `Zeroable`"
+)]
+pub trait IsTrue {}
+
+impl IsTrue for True {}
+
+/// Checks at the type level whether `T` implements [`Zeroable`].
+///
+/// The inherent `check` is only available when `T: Zeroable`; otherwise, method resolution
+/// falls back to [`ZeroableCheckFallback::check`], which returns [`False`].
+pub struct ZeroableCheck<T: ?Sized>(PhantomData<T>);
+
+impl<T: ?Sized> ZeroableCheck<T> {
+    /// Creates a new check for `T`.
+    #[inline(always)]
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T: ?Sized> Default for ZeroableCheck<T> {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: ?Sized + Zeroable> ZeroableCheck<T> {
+    /// Returns [`True`], since `T: Zeroable`.
+    #[inline(always)]
+    pub fn check(&self) -> True {
+        True
+    }
+}
+
+/// Fallback for [`ZeroableCheck::check`] when `T: Zeroable` does not hold.
+pub trait ZeroableCheckFallback {
+    /// Returns [`False`], since `T: Zeroable` does not hold.
+    #[inline(always)]
+    fn check(&self) -> False {
+        False
+    }
+}
+
+impl<T: ?Sized> ZeroableCheckFallback for ZeroableCheck<T> {}
