@@ -14,14 +14,14 @@ const _: () = {
         __this: ::core::marker::PhantomData<&'__this mut Foo>,
     }
     /// Pin-projections of [`Foo`]
-    #[allow(dead_code, non_snake_case)]
+    #[allow(dead_code, non_snake_case, explicit_outlives_requirements)]
     #[doc(hidden)]
     struct __ProjectionLt<'__this> {
         array: &'__this mut [u8; 1024 * 1024],
         _pin: ::core::pin::Pin<&'__this mut PhantomPinned>,
         ___pin_phantom_data: ::core::marker::PhantomData<&'__this mut Foo>,
     }
-    #[allow(dead_code, non_snake_case)]
+    #[allow(dead_code, non_snake_case, explicit_outlives_requirements)]
     #[doc(hidden)]
     struct __ProjectionRef<'__this> {
         array: &'__this [u8; 1024 * 1024],
@@ -87,7 +87,7 @@ const _: () = {
         }
     }
     #[doc(hidden)]
-    #[allow(non_snake_case)]
+    #[allow(non_snake_case, explicit_outlives_requirements)]
     struct __PinDataLt {
         array: ::pin_init::__internal::PhantomInvariant<[u8; 1024 * 1024]>,
         _pin: ::pin_init::__internal::PhantomInvariant<PhantomPinned>,
