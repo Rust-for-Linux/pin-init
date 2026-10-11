@@ -1,0 +1,55 @@
+error[E0119]: conflicting implementations of trait `Unpin` for type `Baz`
+  --> tests/ui/compile-fail/pin_data/selfref_always_pin.rs:17:1
+   |
+17 | #[pin_data]
+   | ^^^^^^^^^^^ conflicting implementation for `Baz`
+...
+24 | impl Unpin for Baz {}
+   | ------------------ first implementation here
+   |
+   = note: upstream crates may add a new impl of trait `std::marker::Unpin` for type `std::marker::PhantomPinned` in future versions
+   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `PhantomPinned` cannot be unpinned
+  --> tests/ui/compile-fail/pin_data/selfref_always_pin.rs:30:20
+   |
+30 |     assert_unpin::<Foo>();
+   |                    ^^^ the trait `Unpin` is not implemented for `PhantomPinned`
+   |
+   = note: consider using the `pin!` macro
+           consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required for `Foo` to implement `Unpin`
+  --> tests/ui/compile-fail/pin_data/selfref_always_pin.rs:5:1
+   |
+ 5 | #[pin_data]
+   | ^^^^^^^^^^^ unsatisfied trait bound introduced here
+ 6 | struct Foo {
+   |        ^^^
+note: required by a bound in `assert_unpin`
+  --> tests/ui/compile-fail/pin_data/selfref_always_pin.rs:26:20
+   |
+26 | fn assert_unpin<T: Unpin>() {}
+   |                    ^^^^^ required by this bound in `assert_unpin`
+   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `PhantomPinned` cannot be unpinned
+  --> tests/ui/compile-fail/pin_data/selfref_always_pin.rs:31:20
+   |
+31 |     assert_unpin::<Bar>();
+   |                    ^^^ the trait `Unpin` is not implemented for `PhantomPinned`
+   |
+   = note: consider using the `pin!` macro
+           consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required for `Bar` to implement `Unpin`
+  --> tests/ui/compile-fail/pin_data/selfref_always_pin.rs:11:1
+   |
+11 | #[pin_data]
+   | ^^^^^^^^^^^ unsatisfied trait bound introduced here
+12 | struct Bar {
+   |        ^^^
+note: required by a bound in `assert_unpin`
+  --> tests/ui/compile-fail/pin_data/selfref_always_pin.rs:26:20
+   |
+26 | fn assert_unpin<T: Unpin>() {}
+   |                    ^^^^^ required by this bound in `assert_unpin`
+   = note: this error originates in the attribute macro `pin_data` (in Nightly builds, run with -Z macro-backtrace for more info)

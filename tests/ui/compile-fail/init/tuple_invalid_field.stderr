@@ -1,4 +1,4 @@
-error[E0599]: no method named `_2` found for struct `__ThePinData` in the current scope
+error[E0599]: no method named `_2` found for struct `__PinDataLt` in the current scope
  --> tests/ui/compile-fail/init/tuple_invalid_field.rs:7:43
   |
 3 | #[pin_data]

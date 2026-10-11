@@ -1,0 +1,5 @@
+error: field `r` cannot borrow from itself
+  --> tests/ui/compile-fail/init/selfref_field_selfref.rs:18:36
+   |
+18 |     r: (String, Mutex<PrintOnDrop<&'r str>>),
+   |                                    ^^

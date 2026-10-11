@@ -1,0 +1,14 @@
+error[E0308]: mismatched types
+  --> tests/ui/compile-fail/pin_data/selfref_mut_borrow.rs:22:21
+   |
+22 |         let _: &_ = proj.mut_str;
+   |                --   ^^^^^^^^^^^^ expected `&_`, found `NotVisible<&String>`
+   |                |
+   |                expected due to this
+   |
+   = note: expected reference `&_`
+                 found struct `pin_init::__internal::NotVisible<&String>`
+help: consider borrowing here
+   |
+22 |         let _: &_ = &proj.mut_str;
+   |                     +
