@@ -32,7 +32,7 @@ const _: () = {
         __this: ::core::marker::PhantomData<&'__this mut Foo<'a, 'b, T, SIZE>>,
     }
     /// Pin-projections of [`Foo`]
-    #[allow(dead_code, non_snake_case)]
+    #[allow(dead_code, non_snake_case, explicit_outlives_requirements)]
     #[doc(hidden)]
     struct __ProjectionLt<
         '__this,
@@ -51,7 +51,7 @@ const _: () = {
             &'__this mut Foo<'a, 'b, T, SIZE>,
         >,
     }
-    #[allow(dead_code, non_snake_case)]
+    #[allow(dead_code, non_snake_case, explicit_outlives_requirements)]
     #[doc(hidden)]
     struct __ProjectionRef<
         '__this,
@@ -136,7 +136,7 @@ const _: () = {
         }
     }
     #[doc(hidden)]
-    #[allow(non_snake_case)]
+    #[allow(non_snake_case, explicit_outlives_requirements)]
     struct __PinDataLt<'a, 'b: 'a, T: Bar<'b> + ?Sized + 'a, const SIZE: usize = 0>
     where
         T: Bar<'a, 1>,
