@@ -286,7 +286,7 @@ fn main() {
                     ::core::mem::forget(___1_guard);
                     ::core::mem::forget(___0_guard);
                 }
-                #[allow(unreachable_code)]
+                #[allow(unreachable_code, clippy::large_unopt_stack_frames)]
                 let _ = || unsafe {
                     let _ = &(*slot).0;
                     let _ = &(*slot).1;
@@ -371,7 +371,7 @@ fn main() {
                     ::core::mem::forget(___1_guard);
                     ::core::mem::forget(___0_guard);
                 }
-                #[allow(unreachable_code)]
+                #[allow(unreachable_code, clippy::large_unopt_stack_frames)]
                 let _ = || unsafe {
                     let _ = &(*slot).0;
                     let _ = &(*slot).1;

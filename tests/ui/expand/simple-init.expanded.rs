@@ -12,7 +12,7 @@ fn main() {
                 ::core::convert::Infallible,
             >(move |slot, data_lt| {
                 if true {} else {}
-                #[allow(unreachable_code)]
+                #[allow(unreachable_code, clippy::large_unopt_stack_frames)]
                 let _ = || unsafe { ::core::ptr::write(slot, Foo {}) };
                 Ok(unsafe { ::pin_init::__internal::InitOk::new() })
             });
