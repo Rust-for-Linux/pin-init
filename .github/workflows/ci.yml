@@ -117,7 +117,9 @@ jobs:
       - run: git config user.name "github-runner" && git config user.email "<>"
       - run: git rebase --exec 'cargo test ui_ --locked --all-targets' --root
         env:
+          # -Zthreads=1 is needed to workaround Rust compiler non-determinism.
           RUSTFLAGS: >
+            -Zthreads=1
             -Dwarnings
             --cfg UI_TESTS
   nightly:
