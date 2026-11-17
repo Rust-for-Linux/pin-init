@@ -21,6 +21,8 @@ help: the return type of this call is `impl pin_init::PinInit<Bar>` due to the t
 note: method defined here
   --> src/__internal.rs
    |
+   | impl<P, T: ?Sized> Slot<P, T> {
+...
    |     pub fn write(self, value: T) -> DropGuard<P, T>
    |            ^^^^^
    = note: this error originates in the macro `pin_init` (in Nightly builds, run with -Z macro-backtrace for more info)

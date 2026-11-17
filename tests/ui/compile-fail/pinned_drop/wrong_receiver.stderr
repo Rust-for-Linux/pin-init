@@ -1,6 +1,7 @@
 error[E0053]: method `drop` has an incompatible type for trait
  --> tests/ui/compile-fail/pinned_drop/wrong_receiver.rs:8:13
   |
+7 | impl PinnedDrop for Foo {
 8 |     fn drop(&mut self) {}
   |             ^^^^^^^^^ expected `Pin<&mut Foo>`, found `&mut Foo`
   |
