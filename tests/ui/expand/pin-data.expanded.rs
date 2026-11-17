@@ -1,6 +1,6 @@
 use core::marker::PhantomPinned;
 use pin_init::*;
-struct Foo {
+pub struct Foo {
     array: [u8; 1024 * 1024],
     _pin: PhantomPinned,
 }
@@ -88,7 +88,7 @@ const _: () = {
     }
     #[doc(hidden)]
     #[allow(non_snake_case, explicit_outlives_requirements)]
-    struct __PinDataLt {
+    pub struct __PinDataLt {
         array: ::pin_init::__internal::PhantomInvariant<[u8; 1024 * 1024]>,
         _pin: ::pin_init::__internal::PhantomInvariant<PhantomPinned>,
         __pin_phantom: ::core::marker::PhantomData<Foo>,
@@ -138,7 +138,7 @@ const _: () = {
         }
     }
     #[doc(hidden)]
-    struct __ThePinData {
+    pub struct __ThePinData {
         __phantom: ::pin_init::__internal::PhantomInvariant<Foo>,
     }
     impl ::core::clone::Clone for __ThePinData {
@@ -151,7 +151,7 @@ const _: () = {
     impl __ThePinData {
         /// Type inference helper function.
         #[inline(always)]
-        fn __make_closure<__F, __E>(self, f: __F) -> __F
+        pub fn __make_closure<__F, __E>(self, f: __F) -> __F
         where
             __F: ::core::ops::FnOnce(
                 *mut Foo,
@@ -161,7 +161,7 @@ const _: () = {
             f
         }
         #[inline(always)]
-        fn __with_lt(self) -> __PinDataLt {
+        pub fn __with_lt(self) -> __PinDataLt {
             unsafe { ::core::mem::zeroed() }
         }
     }
