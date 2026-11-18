@@ -165,6 +165,7 @@ const _: () = {
             unsafe { ::core::mem::zeroed() }
         }
     }
+    #[doc(hidden)]
     unsafe impl ::pin_init::__internal::HasPinData for Foo {
         type PinData = __ThePinData;
         #[inline]
