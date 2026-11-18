@@ -270,6 +270,7 @@ const _: () = {
             unsafe { ::core::mem::zeroed() }
         }
     }
+    #[doc(hidden)]
     unsafe impl<
         'a,
         'b: 'a,

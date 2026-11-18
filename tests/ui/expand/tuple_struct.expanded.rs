@@ -190,6 +190,7 @@ const _: () = {
             unsafe { ::core::mem::zeroed() }
         }
     }
+    #[doc(hidden)]
     unsafe impl<'a, T: Copy, const N: usize> ::pin_init::__internal::HasPinData
     for Foo<'a, T, N> {
         type PinData = __ThePinData<'a, T, N>;
