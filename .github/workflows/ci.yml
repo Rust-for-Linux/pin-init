@@ -23,7 +23,7 @@ jobs:
           fetch-depth: ${{github.event.pull_request.commits}}
           ref: ${{github.event.pull_request.head.sha}}
       # Packages in ubuntu-latest can be old. Use nix to source newer tools.
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@v32
         with:
           github_access_token: ${{ github.token }}
       - uses: dtolnay/rust-toolchain@v1
